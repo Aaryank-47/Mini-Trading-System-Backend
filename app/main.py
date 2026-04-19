@@ -49,13 +49,12 @@ async def lifespan(app: FastAPI):
         logger.error(f"✗ Database initialization failed: {e}")
         raise
     
-    # Initialize Redis
+    # Initialize Redis (optional - app can run without it)
     try:
         init_redis()
         logger.info("✓ Redis initialized")
     except Exception as e:
-        logger.error(f"✗ Redis initialization failed: {e}")
-        raise
+        logger.warning(f"⚠ Redis initialization failed: {e} (continuing without Redis cache)")
     
     # Initialize market prices
     try:

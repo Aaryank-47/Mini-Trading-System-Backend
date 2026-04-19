@@ -2,7 +2,7 @@
 Database models for the Trading Platform
 Defines User, Wallet, Order, and Position tables
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Boolean
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -96,7 +96,7 @@ class Position(Base):
     
     # Composite unique constraint on user_id and symbol
     __table_args__ = (
-        __table_args__ if hasattr(Base, '__table_args__') else (),
+        UniqueConstraint('user_id', 'symbol', name='uq_user_symbol'),
     )
     
     # Relationships

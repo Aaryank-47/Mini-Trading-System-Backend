@@ -1,0 +1,357 @@
+{
+  "info": {
+    "_postman_id": "bulk-data-collection-v2",
+    "name": "Trading Platform - Bulk Data Collection",
+    "description": "Creates 20 users with 20+ orders, positions, and wallets",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "PHASE 1: CREATE 20 USERS",
+      "item": [
+        {
+          "name": "Create User 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"User 1 created\", function() {",
+                  "  pm.response.to.have.status(201);",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.environment.set('user_1', jsonData.id);",
+                  "  console.log('✓ User 1 ID: ' + jsonData.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Trader One\", \"email\": \"trader1@example.com\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create User 2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"User 2 created\", function() {",
+                  "  pm.response.to.have.status(201);",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.environment.set('user_2', jsonData.id);",
+                  "  console.log('✓ User 2 ID: ' + jsonData.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Trader Two\", \"email\": \"trader2@example.com\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create User 3",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"User 3 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_3', pm.response.json().id); console.log('✓ User 3 ID: ' + pm.response.json().id);});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"name\": \"Trader Three\", \"email\": \"trader3@example.com\"}"},
+            "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}
+          }
+        },
+        {
+          "name": "Create User 4",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 4 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_4', pm.response.json().id); console.log('✓ User 4 ID: ' + pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Four\", \"email\": \"trader4@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 5",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 5 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_5', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Five\", \"email\": \"trader5@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 6",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 6 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_6', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Six\", \"email\": \"trader6@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 7",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 7 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_7', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Seven\", \"email\": \"trader7@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 8",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 8 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_8', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Eight\", \"email\": \"trader8@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 9",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 9 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_9', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Nine\", \"email\": \"trader9@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 10",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 10 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_10', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Ten\", \"email\": \"trader10@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 11",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 11 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_11', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Eleven\", \"email\": \"trader11@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 12",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 12 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_12', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Twelve\", \"email\": \"trader12@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 13",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 13 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_13', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Thirteen\", \"email\": \"trader13@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 14",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 14 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_14', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Fourteen\", \"email\": \"trader14@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 15",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 15 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_15', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Fifteen\", \"email\": \"trader15@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 16",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 16 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_16', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Sixteen\", \"email\": \"trader16@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 17",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 17 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_17', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Seventeen\", \"email\": \"trader17@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 18",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 18 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_18', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Eighteen\", \"email\": \"trader18@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 19",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 19 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_19', pm.response.json().id);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Nineteen\", \"email\": \"trader19@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        },
+        {
+          "name": "Create User 20",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"User 20 created\", function() {pm.response.to.have.status(201); pm.environment.set('user_20', pm.response.json().id); console.log('✓✓✓ All 20 Users Created ✓✓✓');});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\": \"Trader Twenty\", \"email\": \"trader20@example.com\"}"}, "url": {"raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"]}}
+        }
+      ]
+    },
+    {
+      "name": "PHASE 2: CREATE 20+ ORDERS",
+      "item": [
+        {
+          "name": "User 1 - BUY SBIN (10)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_1}}, \"symbol\": \"SBIN\", \"qty\": 10, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 1 - BUY RELIANCE (5)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_1}}, \"symbol\": \"RELIANCE\", \"qty\": 5, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 1 - BUY TCS (8)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_1}}, \"symbol\": \"TCS\", \"qty\": 8, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 1 - SELL SBIN (3)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_1}}, \"symbol\": \"SBIN\", \"qty\": 3, \"side\": \"SELL\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 2 - BUY SBIN (15)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_2}}, \"symbol\": \"SBIN\", \"qty\": 15, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 2 - BUY INFY (20)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_2}}, \"symbol\": \"INFY\", \"qty\": 20, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 2 - BUY HDFC (7)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_2}}, \"symbol\": \"HDFC\", \"qty\": 7, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 3 - BUY RELIANCE (12)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_3}}, \"symbol\": \"RELIANCE\", \"qty\": 12, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 4 - BUY INFY (25)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_4}}, \"symbol\": \"INFY\", \"qty\": 25, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 5 - BUY HDFC (9)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_5}}, \"symbol\": \"HDFC\", \"qty\": 9, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 6 - BUY SBIN (11)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_6}}, \"symbol\": \"SBIN\", \"qty\": 11, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 7 - BUY RELIANCE (4)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_7}}, \"symbol\": \"RELIANCE\", \"qty\": 4, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 8 - BUY TCS (13)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_8}}, \"symbol\": \"TCS\", \"qty\": 13, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 9 - BUY INFY (18)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_9}}, \"symbol\": \"INFY\", \"qty\": 18, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 10 - BUY HDFC (14)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_10}}, \"symbol\": \"HDFC\", \"qty\": 14, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 11 - BUY SBIN (22)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_11}}, \"symbol\": \"SBIN\", \"qty\": 22, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 12 - BUY RELIANCE (9)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_12}}, \"symbol\": \"RELIANCE\", \"qty\": 9, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 13 - BUY TCS (16)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_13}}, \"symbol\": \"TCS\", \"qty\": 16, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 14 - BUY INFY (11)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_14}}, \"symbol\": \"INFY\", \"qty\": 11, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 15 - BUY HDFC (19)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_15}}, \"symbol\": \"HDFC\", \"qty\": 19, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 16 - BUY SBIN (7)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_16}}, \"symbol\": \"SBIN\", \"qty\": 7, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 17 - BUY RELIANCE (10)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_17}}, \"symbol\": \"RELIANCE\", \"qty\": 10, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 18 - BUY TCS (5)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_18}}, \"symbol\": \"TCS\", \"qty\": 5, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 19 - BUY INFY (12)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201);});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_19}}, \"symbol\": \"INFY\", \"qty\": 12, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        },
+        {
+          "name": "User 20 - BUY HDFC (8)",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"Order created\", function() {pm.response.to.have.status(201); console.log('✓✓✓ All 20+ Orders Created ✓✓✓');});"], "type": "text/javascript"}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"user_id\": {{user_20}}, \"symbol\": \"HDFC\", \"qty\": 8, \"side\": \"BUY\"}"}, "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}}
+        }
+      ]
+    },
+    {
+      "name": "PHASE 3: VERIFY PORTFOLIOS",
+      "item": [
+        {
+          "name": "Get Portfolio - User 1",
+          "request": {"method": "GET", "header": [], "url": {"raw": "{{base_url}}/portfolio/{{user_1}}", "host": ["{{base_url}}"], "path": ["portfolio", "{{user_1}}"]}}
+        },
+        {
+          "name": "Get Portfolio - User 10",
+          "request": {"method": "GET", "header": [], "url": {"raw": "{{base_url}}/portfolio/{{user_10}}", "host": ["{{base_url}}"], "path": ["portfolio", "{{user_10}}"]}}
+        },
+        {
+          "name": "Get Portfolio - User 20",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test(\"All portfolios verified\", function() {pm.response.to.have.status(200); console.log('✓✓✓ BULK DATA COMPLETE ✓✓✓');});"], "type": "text/javascript"}}],
+          "request": {"method": "GET", "header": [], "url": {"raw": "{{base_url}}/portfolio/{{user_20}}", "host": ["{{base_url}}"], "path": ["portfolio", "{{user_20}}"]}}
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ]
+}

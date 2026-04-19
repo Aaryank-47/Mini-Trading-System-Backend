@@ -1,0 +1,396 @@
+{
+  "info": {
+    "_postman_id": "trading-platform-api-fixed",
+    "name": "Trading Platform API - FIXED ORDER",
+    "description": "Complete API test collection with CORRECT TEST ORDER - Delete User runs LAST",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "symbol",
+      "value": "SBIN",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. CREATE USER (STEP 1 - First)",
+      "item": [
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 201\", function() {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"✓ User created with ID\", function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.have.property('id');",
+                  "  pm.expect(jsonData).to.have.property('name');",
+                  "  pm.expect(jsonData).to.have.property('email');",
+                  "  pm.environment.set('user_id', jsonData.id);",
+                  "  console.log('User created with ID: ' + jsonData.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Test Trader\", \"email\": \"trader{{$timestamp}}@example.com\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. GET MARKET PRICES (STEP 2)",
+      "item": [
+        {
+          "name": "Get All Prices",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 200\", function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"✓ Response contains SBIN price\", function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.have.property('SBIN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{base_url}}/market/prices", "host": ["{{base_url}}"], "path": ["market", "prices"]}
+          }
+        },
+        {
+          "name": "Get Symbol Price",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 200\", function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"✓ Response has symbol and price\", function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.have.property('symbol');",
+                  "  pm.expect(jsonData).to.have.property('price');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{base_url}}/market/price/{{symbol}}", "host": ["{{base_url}}"], "path": ["market", "price", "{{symbol}}"]}
+          }
+        },
+        {
+          "name": "Market Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 200\", function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{base_url}}/market/health", "host": ["{{base_url}}"], "path": ["market", "health"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. CREATE ORDERS (STEP 3)",
+      "item": [
+        {
+          "name": "Create BUY Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 201\", function() {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"✓ BUY order created\", function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.side).to.equal('BUY');",
+                  "  pm.expect(jsonData.status).to.equal('COMPLETED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"user_id\": {{user_id}}, \"symbol\": \"{{symbol}}\", \"qty\": 10, \"side\": \"BUY\"}"},
+            "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}
+          }
+        },
+        {
+          "name": "Create SELL Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 201\", function() {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"✓ SELL order created\", function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData.side).to.equal('SELL');",
+                  "  pm.expect(jsonData.status).to.equal('COMPLETED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"user_id\": {{user_id}}, \"symbol\": \"{{symbol}}\", \"qty\": 5, \"side\": \"SELL\"}"},
+            "url": {"raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. GET ORDERS & PORTFOLIO (STEP 4)",
+      "item": [
+        {
+          "name": "Get Order History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 200\", function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"✓ Response is array\", function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{base_url}}/orders/{{user_id}}?skip=0&limit=50", "host": ["{{base_url}}"], "path": ["orders", "{{user_id}}"], "query": [{"key": "skip", "value": "0"}, {"key": "limit", "value": "50"}]}
+          }
+        },
+        {
+          "name": "Get Order Count",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 200\", function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"✓ Response has total_orders\", function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.have.property('total_orders');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{base_url}}/orders/{{user_id}}/count", "host": ["{{base_url}}"], "path": ["orders", "{{user_id}}", "count"]}
+          }
+        },
+        {
+          "name": "Get Complete Portfolio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 200\", function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"✓ Portfolio has holdings\", function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.have.property('wallet_balance');",
+                  "  pm.expect(jsonData).to.have.property('holdings');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{base_url}}/portfolio/{{user_id}}", "host": ["{{base_url}}"], "path": ["portfolio", "{{user_id}}"]}
+          }
+        },
+        {
+          "name": "Get Positions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 200\", function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"✓ Response is array\", function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{base_url}}/portfolio/{{user_id}}/positions", "host": ["{{base_url}}"], "path": ["portfolio", "{{user_id}}", "positions"]}
+          }
+        },
+        {
+          "name": "Get Wallet Balance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 200\", function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"✓ Response has balance\", function() {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.expect(jsonData).to.have.property('balance');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{base_url}}/portfolio/{{user_id}}/balance", "host": ["{{base_url}}"], "path": ["portfolio", "{{user_id}}", "balance"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. GET USER DETAILS (STEP 5)",
+      "item": [
+        {
+          "name": "Get User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 200\", function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{base_url}}/users/{{user_id}}", "host": ["{{base_url}}"], "path": ["users", "{{user_id}}"]}
+          }
+        },
+        {
+          "name": "Get All Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 200\", function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{base_url}}/users?skip=0&limit=10", "host": ["{{base_url}}"], "path": ["users"], "query": [{"key": "skip", "value": "0"}, {"key": "limit", "value": "10"}]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. DELETE USER (RUN THIS LAST - STEP 6)",
+      "item": [
+        {
+          "name": "Delete User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"✓ Status code is 204\", function() {",
+                  "  pm.response.to.have.status(204);",
+                  "});",
+                  "console.log('User deleted successfully!');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {"raw": "{{base_url}}/users/{{user_id}}", "host": ["{{base_url}}"], "path": ["users", "{{user_id}}"]}
+          }
+        }
+      ]
+    }
+  ]
+}
