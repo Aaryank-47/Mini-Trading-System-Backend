@@ -2,20 +2,13 @@
 Configuration module for the Trading Platform API
 Manages environment variables and app settings
 """
-from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic import BaseSettings
 from functools import lru_cache
 import os
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
-    model_config = ConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore"
-    )
     
     environment: str = "LOCAL"
     
@@ -38,6 +31,12 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
     
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = False
+        extra = "ignore"
+    
     def __init__(self, **data):
         """Initialize settings and select appropriate DB URL based on environment"""
         super().__init__(**data)
@@ -48,6 +47,9 @@ class Settings(BaseSettings):
 
 
 @lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance"""
+    return Settings()
 def get_settings() -> Settings:
     """Get cached settings instance"""
     return Settings()
