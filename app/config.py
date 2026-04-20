@@ -2,20 +2,18 @@
 Configuration module for the Trading Platform API
 Manages environment variables and app settings
 """
-from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
 from functools import lru_cache
 import os
+
+# Handle both pydantic 1.x and 2.x
+try:
+    from pydantic import BaseSettings
+except ImportError:
+    from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
-    model_config = ConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore"
-    )
     
     environment: str = "LOCAL"
     
@@ -37,6 +35,12 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = False
+        extra = "ignore"
     
     def __init__(self, **data):
         """Initialize settings and select appropriate DB URL based on environment"""
