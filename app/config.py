@@ -4,12 +4,14 @@ Manages environment variables and app settings
 """
 from functools import lru_cache
 import os
+from packaging import version
+import pydantic
 
 # Handle both pydantic 1.x and 2.x
-try:
-    from pydantic import BaseSettings
-except ImportError:
+if version.parse(pydantic.VERSION) >= version.parse("2.0.0"):
     from pydantic_settings import BaseSettings
+else:
+    from pydantic import BaseSettings
 
 
 class Settings(BaseSettings):
