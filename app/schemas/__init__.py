@@ -1,7 +1,7 @@
 """
 Pydantic schemas for request/response validation
 """
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, validator, root_validator
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
@@ -14,15 +14,13 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=8, description="Password with uppercase, lowercase, digit, and special character")
     confirm_password: str = Field(..., min_length=8)
     
-    @field_validator('name')
-    @classmethod
+    @validator('name')
     def validate_name(cls, v):
         if any(char in v for char in ['<', '>', '"', "'"]):
             raise ValueError('Name contains invalid characters')
         return v.strip()
     
-    @field_validator('password')
-    @classmethod
+    @validator('password')
     def validate_password(cls, v):
         """Validate password strength"""
         from app.utils.password import validate_password_strength
@@ -31,13 +29,14 @@ class UserCreate(BaseModel):
             raise ValueError(error)
         return v
     
-    @field_validator('confirm_password')
-    @classmethod
-    def validate_confirm_password(cls, v, info):
+    @root_validator
+    def validate_passwords_match(cls, values):
         """Validate password confirmation matches"""
-        if 'password' in info.data and v != info.data['password']:
+        password = values.get('password')
+        confirm_password = values.get('confirm_password')
+        if password and confirm_password and password != confirm_password:
             raise ValueError('Passwords do not match')
-        return v
+        return values
 
 
 class UserResponse(BaseModel):
@@ -71,8 +70,7 @@ class OrderCreate(BaseModel):
     qty: int = Field(..., gt=0, le=1000000)
     side: str = Field(..., pattern="^(BUY|SELL)$")
     
-    @field_validator('symbol')
-    @classmethod
+    @validator('symbol')
     def validate_symbol(cls, v):
         v = v.upper()
         if not v.isalpha():
