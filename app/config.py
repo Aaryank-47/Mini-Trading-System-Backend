@@ -1,34 +1,52 @@
 """
 Configuration module for the Trading Platform API
 Manages environment variables and app settings
+Securely loads configuration from .env files and environment variables
 """
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
+from pydantic import Field
 from functools import lru_cache
 import os
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables"""
+    """
+    Application settings loaded from environment variables.
     
-    environment: str = "LOCAL"
+    For local development: Create a .env file with your local secrets
+    For production: Set environment variables in your platform (Render, Railway, etc.)
+    """
     
+    # Environment
+    environment: str = Field(default="LOCAL", validation_alias="ENVIRONMENT")
+    
+    # App info
     app_name: str = "Trading Platform API"
-    debug: bool = False
-    secret_key: str
+    debug: bool = Field(default=False, validation_alias="DEBUG")
+    
+    # Security - MUST be set in environment, no default for production
+    secret_key: str = Field(
+        default="dev-secret-key-only-for-local-testing",
+        validation_alias="SECRET_KEY",
+        description="Secret key for JWT tokens - Change in production!"
+    )
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
-    local_db_url: str = "mysql+pymysql://root:password@localhost/trading_db"
-    neon_db_url: str = "postgresql://user:password@host/neondb?sslmode=require"
-    db_url: str = "mysql+pymysql://root:password@localhost/trading_db"
-    mysql_host: str = "localhost"
-    mysql_user: str = "root"
-    mysql_password: str = "password"
-    mysql_database: str = "trading_db"
+    # Database - Read from environment variables
+    mysql_host: str = Field(default="localhost", validation_alias="MYSQL_HOST")
+    mysql_user: str = Field(default="root", validation_alias="MYSQL_USER")
+    mysql_password: str = Field(default="password", validation_alias="MYSQL_PASSWORD")
+    mysql_database: str = Field(default="trading_db", validation_alias="MYSQL_DATABASE")
     
-    redis_url: str = "redis://localhost:6379"
-    redis_host: str = "localhost"
-    redis_port: int = 6379
+    # Redis - Read from environment variables
+    redis_url: str = Field(
+        default="redis://localhost:6379",
+        validation_alias="REDIS_URL",
+        description="Redis connection URL"
+    )
+    redis_host: str = Field(default="localhost", validation_alias="REDIS_HOST")
+    redis_port: int = Field(default=6379, validation_alias="REDIS_PORT")
     redis_db: int = 0
     
     class Config:
@@ -37,19 +55,19 @@ class Settings(BaseSettings):
         case_sensitive = False
         extra = "ignore"
     
-    def __init__(self, **data):
-        """Initialize settings and select appropriate DB URL based on environment"""
-        super().__init__(**data)
-        if self.environment.upper() == "DEPLOYED":
-            self.db_url = self.neon_db_url
-        else:
-            self.db_url = self.local_db_url
+    @property
+    def database_url(self) -> str:
+        """
+        Construct database URL from components.
+        Supports MySQL for local/cloud deployment.
+        """
+        return f"mysql+pymysql://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}/{self.mysql_database}"
 
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Get cached settings instance"""
-    return Settings()
-def get_settings() -> Settings:
-    """Get cached settings instance"""
+    """
+    Get cached settings instance.
+    Uses caching to avoid re-parsing .env file multiple times.
+    """
     return Settings()

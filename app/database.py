@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 connect_args = {}
-db_url = settings.db_url
+db_url = settings.database_url
 
 if "sqlite" in db_url.lower():
     connect_args = {"check_same_thread": False}
@@ -32,7 +32,7 @@ try:
     engine.connect()
     logger.info(f"Successfully connected to database")
 except Exception as e:
-    logger.warning(f"Failed to connect to MySQL: {e}")
+    logger.warning(f"Failed to connect to database: {e}")
     logger.info("Falling back to SQLite for local development")
     db_url = "sqlite:///./trading.db"
     connect_args = {"check_same_thread": False}
