@@ -41,44 +41,74 @@ async def lifespan(app: FastAPI):
     Manage application lifecycle
     Startup: Initialize database, Redis, and background tasks
     Shutdown: Clean up resources
+    
+    ⚠️ IMPORTANT: Never raise exceptions in lifespan startup.
+    Use graceful degradation instead - app should start even if
+    some services are temporarily unavailable.
     """
     # ============= STARTUP =============
+    logger.info("="*60)
     logger.info("🚀 Starting Trading Platform API...")
+    logger.info(f"Environment: {settings.environment}")
+    logger.info(f"Debug: {settings.debug}")
+    logger.info("="*60)
     
+    startup_success = True
+    
+    # Database Initialization (Critical but don't crash)
     try:
+        logger.info("📊 Attempting database initialization...")
         init_db()
-        logger.info("✓ Database initialized")
+        logger.info("✓ Database initialized successfully")
     except Exception as e:
         logger.error(f"✗ Database initialization failed: {e}")
-        import os
-        if os.environ.get('PYTEST_CURRENT_TEST'):
-            logger.info("Skipping database initialization error during testing")
-        else:
-            raise
+        logger.error(f"   Make sure MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD are set in environment")
+        startup_success = False
+        # Don't raise - let app start and retry later if needed
     
+    # Redis Initialization (Optional - graceful degradation)
+    redis_ok = False
     try:
+        logger.info("💾 Attempting Redis initialization...")
         init_redis()
-        logger.info("✓ Redis initialized")
+        redis_ok = True
+        logger.info("✓ Redis initialized successfully")
     except Exception as e:
-        logger.warning(f"⚠ Redis initialization failed: {e} (continuing without Redis cache)")
+        logger.warning(f"⚠️  Redis initialization failed: {e}")
+        logger.warning(f"   Continuing without Redis cache (caching disabled)")
+        # Redis is optional, don't crash app
     
+    # Price Service Initialization
     try:
+        logger.info("📈 Initializing market prices...")
         PriceService.initialize_prices()
         logger.info("✓ Market prices initialized")
     except Exception as e:
         logger.error(f"✗ Price initialization failed: {e}")
+        # Price service failure is non-critical
     
+    # Background Price Update Task
     global price_update_task
     try:
+        logger.info("🔄 Starting background price update task...")
         price_update_task = asyncio.create_task(update_prices_background())
         logger.info("✓ Background price update task started")
     except Exception as e:
         logger.error(f"✗ Failed to start price update task: {e}")
+        # Task failure is non-critical
     
-    logger.info("✅ Application startup completed!\n")
+    if startup_success:
+        logger.info("="*60)
+        logger.info("✅ Application startup completed successfully!")
+        logger.info("="*60)
+    else:
+        logger.warning("="*60)
+        logger.warning("⚠️  Application started with errors (check logs above)")
+        logger.warning("="*60)
     
     yield
     
+    # ============= SHUTDOWN =============
     logger.info("🛑 Shutting down Trading Platform API...")
     
     if price_update_task:
@@ -90,6 +120,7 @@ async def lifespan(app: FastAPI):
         logger.info("✓ Price update task stopped")
     
     logger.info("✅ Application shutdown completed!")
+
 
 
 # Create FastAPI app
