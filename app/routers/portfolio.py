@@ -1,5 +1,6 @@
 """
 Portfolio and position API routes
+✅ FIXED: Added JWT authentication and authorization
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -9,6 +10,7 @@ from app.services.user_service import UserService
 from app.services.wallet_service import WalletService
 from app.services.position_service import PositionService
 from app.utils.redis_manager import get_price
+from app.security import get_current_user, verify_user_ownership  # ✅ NEW: Import auth
 from typing import List
 
 router = APIRouter(
@@ -21,10 +23,13 @@ router = APIRouter(
 @router.get("/{user_id}", response_model=PortfolioResponse)
 def get_portfolio(
     user_id: int,
+    current_user_id: int = Depends(get_current_user),  # ✅ FIXED: Require authentication
     db: Session = Depends(get_db)
 ):
     """
-    Get complete portfolio for a user
+    ✅ FIXED: Get complete portfolio for a user (requires authentication)
+    
+    Requires: Bearer token in Authorization header (can only access own portfolio)
     
     Returns:
     - All holdings with current prices
@@ -32,6 +37,9 @@ def get_portfolio(
     - Total portfolio value
     - Total unrealized P&L
     """
+    # ✅ FIXED: Verify user is accessing their own portfolio
+    verify_user_ownership(user_id, current_user_id)
+    
     # Validate user exists
     user = UserService.get_user(db, user_id)
     if not user:
@@ -80,7 +88,7 @@ def get_portfolio(
         total_current_value += current_value
         total_unrealized_pnl += unrealized_pnl
     
-    total_portfolio_value = wallet_balance + total_current_value
+    total_portfolio_value = float(wallet_balance) + total_current_value
     total_pnl_percentage = 0.0
     if total_invested > 0:
         total_pnl_percentage = (total_unrealized_pnl / total_invested) * 100
@@ -99,9 +107,17 @@ def get_portfolio(
 @router.get("/{user_id}/positions", response_model=List[PortfolioItem])
 def get_positions(
     user_id: int,
+    current_user_id: int = Depends(get_current_user),  # ✅ FIXED: Require authentication
     db: Session = Depends(get_db)
 ):
-    """Get all open positions for a user"""
+    """
+    ✅ FIXED: Get all open positions for a user (requires authentication)
+    
+    Requires: Bearer token in Authorization header (can only access own positions)
+    """
+    # ✅ FIXED: Verify user is accessing their own positions
+    verify_user_ownership(user_id, current_user_id)
+    
     # Validate user exists
     user = UserService.get_user(db, user_id)
     if not user:

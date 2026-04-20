@@ -4,6 +4,7 @@ Wallet service for managing wallet operations
 from sqlalchemy.orm import Session
 from app.models import Wallet, User
 from app.schemas import WalletResponse
+from decimal import Decimal, ROUND_HALF_UP
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class WalletService:
         return db.query(Wallet).filter(Wallet.user_id == user_id).first()
     
     @staticmethod
-    def get_balance(db: Session, user_id: int) -> float:
+    def get_balance(db: Session, user_id: int) -> Decimal:
         """
         Get current wallet balance
         
@@ -36,7 +37,7 @@ class WalletService:
             user_id: User ID
             
         Returns:
-            Balance amount or None
+            Balance amount as Decimal or None
         """
         wallet = WalletService.get_wallet(db, user_id)
         return wallet.balance if wallet else None
@@ -44,7 +45,7 @@ class WalletService:
     @staticmethod
     def deduct_balance(db: Session, user_id: int, amount: float) -> bool:
         """
-        Deduct amount from wallet
+        ✅ FIXED: Deduct amount from wallet with row-level locking
         
         Args:
             db: Database session
@@ -54,11 +55,19 @@ class WalletService:
         Returns:
             True if successful, False if insufficient balance
         """
-        wallet = WalletService.get_wallet(db, user_id)
+        # ✅ FIXED: Convert to Decimal with proper rounding
+        amount = Decimal(str(amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        
+        # ✅ FIXED: Use with_for_update() for row-level locking (atomic)
+        wallet = db.query(Wallet).filter(
+            Wallet.user_id == user_id
+        ).with_for_update().first()
+        
         if not wallet:
             raise ValueError(f"Wallet not found for user {user_id}")
         
         if wallet.balance < amount:
+            logger.warning(f"Insufficient balance for user {user_id}: {wallet.balance} < {amount}")
             return False
         
         wallet.balance -= amount
@@ -69,7 +78,7 @@ class WalletService:
     @staticmethod
     def add_balance(db: Session, user_id: int, amount: float) -> bool:
         """
-        Add amount to wallet
+        ✅ FIXED: Add amount to wallet with row-level locking
         
         Args:
             db: Database session
@@ -79,7 +88,14 @@ class WalletService:
         Returns:
             True if successful
         """
-        wallet = WalletService.get_wallet(db, user_id)
+        # ✅ FIXED: Convert to Decimal with proper rounding
+        amount = Decimal(str(amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        
+        # ✅ FIXED: Use with_for_update() for row-level locking
+        wallet = db.query(Wallet).filter(
+            Wallet.user_id == user_id
+        ).with_for_update().first()
+        
         if not wallet:
             raise ValueError(f"Wallet not found for user {user_id}")
         

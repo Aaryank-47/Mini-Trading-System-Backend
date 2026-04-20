@@ -1,16 +1,43 @@
 """
 Pydantic schemas for request/response validation
 """
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
+from decimal import Decimal
 
 
-# ==================== User Schemas ====================
 class UserCreate(BaseModel):
     """Schema for creating a new user"""
     name: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
+    password: str = Field(..., min_length=8, description="Password with uppercase, lowercase, digit, and special character")
+    confirm_password: str = Field(..., min_length=8)
+    
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v):
+        if any(char in v for char in ['<', '>', '"', "'"]):
+            raise ValueError('Name contains invalid characters')
+        return v.strip()
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v):
+        """Validate password strength"""
+        from app.utils.password import validate_password_strength
+        error = validate_password_strength(v)
+        if error:
+            raise ValueError(error)
+        return v
+    
+    @field_validator('confirm_password')
+    @classmethod
+    def validate_confirm_password(cls, v, info):
+        """Validate password confirmation matches"""
+        if 'password' in info.data and v != info.data['password']:
+            raise ValueError('Passwords do not match')
+        return v
 
 
 class UserResponse(BaseModel):
@@ -25,12 +52,11 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
-# ==================== Wallet Schemas ====================
 class WalletResponse(BaseModel):
     """Schema for wallet response"""
     id: int
     user_id: int
-    balance: float
+    balance: Decimal
     created_at: datetime
     updated_at: datetime
     
@@ -38,13 +64,20 @@ class WalletResponse(BaseModel):
         from_attributes = True
 
 
-# ==================== Order Schemas ====================
 class OrderCreate(BaseModel):
     """Schema for creating an order"""
-    user_id: int
-    symbol: str = Field(..., min_length=1, max_length=50)
-    qty: int = Field(..., gt=0)
+    user_id: int = Field(..., gt=0)
+    symbol: str = Field(..., min_length=1, max_length=10)
+    qty: int = Field(..., gt=0, le=1000000)
     side: str = Field(..., pattern="^(BUY|SELL)$")
+    
+    @field_validator('symbol')
+    @classmethod
+    def validate_symbol(cls, v):
+        v = v.upper()
+        if not v.isalpha():
+            raise ValueError('Symbol must contain only letters')
+        return v
 
 
 class OrderResponse(BaseModel):
@@ -53,8 +86,8 @@ class OrderResponse(BaseModel):
     user_id: int
     symbol: str
     quantity: int
-    price: float
-    total_amount: float
+    price: Decimal
+    total_amount: Decimal
     side: str
     status: str
     created_at: datetime
@@ -69,8 +102,8 @@ class OrderHistoryResponse(BaseModel):
     id: int
     symbol: str
     quantity: int
-    price: float
-    total_amount: float
+    price: Decimal
+    total_amount: Decimal
     side: str
     status: str
     created_at: datetime
@@ -79,14 +112,13 @@ class OrderHistoryResponse(BaseModel):
         from_attributes = True
 
 
-# ==================== Position Schemas ====================
 class PositionResponse(BaseModel):
     """Schema for position response"""
     id: int
     user_id: int
     symbol: str
     quantity: int
-    average_price: float
+    average_price: Decimal
     created_at: datetime
     updated_at: datetime
     
@@ -94,40 +126,75 @@ class PositionResponse(BaseModel):
         from_attributes = True
 
 
-# ==================== Portfolio Schemas ====================
 class PortfolioItem(BaseModel):
     """Schema for a portfolio holding"""
     symbol: str
     quantity: int
-    average_price: float
-    current_price: float
-    total_invested: float
-    current_value: float
-    unrealized_pnl: float
-    pnl_percentage: float
+    average_price: Decimal
+    current_price: Decimal
+    total_invested: Decimal
+    current_value: Decimal
+    unrealized_pnl: Decimal
+    pnl_percentage: Decimal
 
 
 class PortfolioResponse(BaseModel):
     """Schema for full portfolio response"""
     user_id: int
-    wallet_balance: float
+    wallet_balance: Decimal
     holdings: List[PortfolioItem]
-    total_portfolio_value: float
-    total_invested: float
-    total_unrealized_pnl: float
-    total_pnl_percentage: float
+    total_portfolio_value: Decimal
+    total_invested: Decimal
+    total_unrealized_pnl: Decimal
+    total_pnl_percentage: Decimal
 
 
-# ==================== WebSocket Schemas ====================
+class LoginRequest(BaseModel):
+    """Schema for user login request"""
+    email: EmailStr
+    password: str = Field(..., min_length=1)
+
+
+class TokenResponse(BaseModel):
+    """Schema for JWT token response (registration/login)"""
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
+
+
+class AccessTokenResponse(BaseModel):
+    """Schema for access token response"""
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
+    expires_in: int  # Seconds
+
+
+class RefreshTokenResponse(BaseModel):
+    """Schema for refresh token response"""
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int  # Seconds
+
+
+class LoginResponse(BaseModel):
+    """Schema for complete login response with both tokens"""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user_id: int
+    expires_in: int
+
+
 class OrderExecutedMessage(BaseModel):
     """Schema for WebSocket order executed message"""
     event: str
     symbol: str
     qty: int
-    price: float
+    price: Decimal
     side: str
     status: str
-    total_amount: float
+    total_amount: Decimal
     timestamp: datetime
 
 
@@ -135,11 +202,10 @@ class PriceUpdateMessage(BaseModel):
     """Schema for WebSocket price update message"""
     event: str
     symbol: str
-    price: float
+    price: Decimal
     timestamp: datetime
 
 
-# ==================== Error Response Schemas ====================
 class ErrorResponse(BaseModel):
     """Schema for error responses"""
     detail: str

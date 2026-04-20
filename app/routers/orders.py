@@ -1,16 +1,21 @@
 """
 Order management API routes
+✅ FIXED: Added JWT authentication and ownership verification
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas import OrderCreate, OrderResponse, OrderHistoryResponse
 from app.services.order_service import OrderService
+from app.services.user_service import UserService
+from app.security import get_current_user, verify_user_ownership
 from app.websocket import connection_manager
 from datetime import datetime
 from typing import List
 import asyncio
 import logging
+
+from app.utils.rate_limiter import limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -21,12 +26,17 @@ router = APIRouter(
 
 
 @router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 def create_order(
+    request: Request,
     order_data: OrderCreate,
+    current_user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Execute a new order (BUY or SELL)
+    ✅ FIXED: Execute a new order with authentication
+    
+    Requires: Bearer token in Authorization header
     
     **BUY Logic:**
     - Fetches price from Redis
@@ -42,8 +52,8 @@ def create_order(
     Both operations create an order record with status = COMPLETED
     """
     try:
-        # Validate user exists
-        from app.services.user_service import UserService
+        verify_user_ownership(order_data.user_id, current_user_id)
+        
         user = UserService.get_user(db, order_data.user_id)
         if not user:
             raise HTTPException(
@@ -51,10 +61,8 @@ def create_order(
                 detail=f"User {order_data.user_id} not found"
             )
         
-        # Execute order
         order = OrderService.execute_order(db, order_data)
         
-        # Send WebSocket notification
         try:
             asyncio.create_task(_send_order_notification(order_data.user_id, order))
         except Exception as ws_error:
@@ -79,16 +87,20 @@ def create_order(
 @router.get("/{user_id}", response_model=List[OrderHistoryResponse])
 def get_order_history(
     user_id: int,
+    current_user_id: int = Depends(get_current_user),
     skip: int = 0,
-    limit: int = 50,
+    limit: int = Query(100, le=500),
     db: Session = Depends(get_db)
 ):
     """
-    Get order history for a user
+    ✅ FIXED: Get order history with authentication
+    
+    Requires: Bearer token in Authorization header (can only access own orders)
     
     Returns all past orders sorted by most recent first
     """
-    from app.services.user_service import UserService
+    verify_user_ownership(user_id, current_user_id)
+    
     user = UserService.get_user(db, user_id)
     if not user:
         raise HTTPException(

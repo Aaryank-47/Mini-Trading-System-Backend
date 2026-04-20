@@ -2,12 +2,13 @@
 Database models for the Trading Platform
 Defines User, Wallet, Order, and Position tables
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Boolean, UniqueConstraint, DECIMAL, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
 import enum
 from app.database import Base
+from decimal import Decimal
 
 
 class User(Base):
@@ -17,6 +18,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
@@ -35,7 +37,7 @@ class Wallet(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
-    balance = Column(Float, default=1000000.0, nullable=False)  # Default: ₹10,00,000
+    balance = Column(DECIMAL(precision=18, scale=2), default=Decimal('1000000.00'), nullable=False)  # ✅ FIXED: Decimal type
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
@@ -68,12 +70,18 @@ class Order(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     symbol = Column(String(50), nullable=False, index=True)
     quantity = Column(Integer, nullable=False)
-    price = Column(Float, nullable=False)
-    total_amount = Column(Float, nullable=False)
+    price = Column(DECIMAL(precision=12, scale=2), nullable=False)  # ✅ FIXED: Decimal type
+    total_amount = Column(DECIMAL(precision=18, scale=2), nullable=False)  # ✅ FIXED: Decimal type
     side = Column(Enum(OrderSide), nullable=False)
     status = Column(Enum(OrderStatus), default=OrderStatus.COMPLETED, nullable=False, index=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    # ✅ FIXED: Add composite indexes
+    __table_args__ = (
+        Index('idx_user_status', 'user_id', 'status'),
+        Index('idx_user_created', 'user_id', 'created_at'),
+    )
     
     # Relationships
     user = relationship("User", back_populates="orders")
@@ -90,7 +98,7 @@ class Position(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     symbol = Column(String(50), nullable=False, index=True)
     quantity = Column(Integer, default=0, nullable=False)
-    average_price = Column(Float, default=0.0, nullable=False)
+    average_price = Column(DECIMAL(precision=12, scale=2), default=Decimal('0.00'), nullable=False)  # ✅ FIXED: Decimal type
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     

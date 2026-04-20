@@ -2,8 +2,10 @@
 Position service for managing user holdings
 """
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from app.models import Position
 from typing import Optional
+from decimal import Decimal, ROUND_HALF_UP
 import logging
 
 logger = logging.getLogger(__name__)
@@ -73,27 +75,36 @@ class PositionService:
     
     @staticmethod
     def update_position_on_buy(db: Session, user_id: int, symbol: str,
-                              quantity: int, price: float) -> Position:
+                              quantity: int, price: Decimal) -> Position:
         """
-        Update position on BUY order (weighted average price calculation)
+        ✅ FIXED: Update position on BUY order with weighted average price calculation
+        
+        - Uses Decimal for precision
+        - Uses with_for_update() for row-level locking
         
         Args:
             db: Database session
             user_id: User ID
             symbol: Stock symbol
             quantity: Number of shares to buy
-            price: Price per share
+            price: Price per share (Decimal)
             
         Returns:
             Updated position object
         """
-        position = PositionService.get_position(db, user_id, symbol)
+        # ✅ FIXED: Use with_for_update() for row-level locking
+        position = db.query(Position).filter(
+            and_(
+                Position.user_id == user_id,
+                Position.symbol == symbol
+            )
+        ).with_for_update().first()
         
         if position:
-            # Calculate weighted average price
-            total_cost = (position.quantity * position.average_price) + (quantity * price)
+            # ✅ FIXED: Use Decimal arithmetic with proper rounding
+            total_cost = (Decimal(position.quantity) * position.average_price) + (Decimal(quantity) * price)
             total_quantity = position.quantity + quantity
-            position.average_price = total_cost / total_quantity
+            position.average_price = (total_cost / Decimal(total_quantity)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             position.quantity = total_quantity
         else:
             # Create new position

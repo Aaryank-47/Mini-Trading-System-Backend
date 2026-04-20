@@ -5,6 +5,7 @@ Manages environment variables and app settings
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from functools import lru_cache
+import os
 
 
 class Settings(BaseSettings):
@@ -16,25 +17,34 @@ class Settings(BaseSettings):
         extra="ignore"
     )
     
-    # App Configuration
+    environment: str = "LOCAL"
+    
     app_name: str = "Trading Platform API"
-    debug: bool = True
-    secret_key: str = "your-secret-key-change-in-production"
+    debug: bool = False
+    secret_key: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
-    # Database Configuration
+    local_db_url: str = "mysql+pymysql://root:password@localhost/trading_db"
+    neon_db_url: str = "postgresql://user:password@host/neondb?sslmode=require"
     db_url: str = "mysql+pymysql://root:password@localhost/trading_db"
     mysql_host: str = "localhost"
     mysql_user: str = "root"
     mysql_password: str = "password"
     mysql_database: str = "trading_db"
     
-    # Redis Configuration
     redis_url: str = "redis://localhost:6379"
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    
+    def __init__(self, **data):
+        """Initialize settings and select appropriate DB URL based on environment"""
+        super().__init__(**data)
+        if self.environment.upper() == "DEPLOYED":
+            self.db_url = self.neon_db_url
+        else:
+            self.db_url = self.local_db_url
 
 
 @lru_cache()
