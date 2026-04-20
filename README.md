@@ -164,6 +164,72 @@ The server will start at: **http://localhost:8000**
 
 ## 📚 API Documentation
 
+### 0. System Health & Monitoring
+
+#### Check Overall System Health
+```http
+GET /health
+```
+
+**Response:**
+```json
+{
+  "status": "healthy|degraded|unhealthy",
+  "timestamp": "2024-01-15T10:30:00",
+  "uptime": {
+    "seconds": 3600,
+    "formatted": "1h"
+  },
+  "components": {
+    "database": {"status": "healthy", "connected": true},
+    "redis": {"status": "healthy", "connected": true}
+  },
+  "metrics": {
+    "cpu_percent": 15.2,
+    "memory": {"percent": 50.0, "used_mb": 4096}
+  }
+}
+```
+
+#### Quick Health Check (for load balancers)
+```http
+GET /health/quick
+```
+
+**Response:**
+```json
+{
+  "status": "ok|warning|error",
+  "database": "✅|❌",
+  "redis": "✅|❌",
+  "uptime_seconds": 3600
+}
+```
+
+#### Check Redis Connection
+```http
+GET /health/redis
+```
+
+#### Check Database Connection
+```http
+GET /health/database
+```
+
+#### Get Server Metrics
+```http
+GET /health/metrics
+```
+
+#### Force Redis Reconnection
+```http
+POST /redis/reconnect
+```
+
+**For complete health check documentation, see:** [HEALTH_CHECK_API.md](./HEALTH_CHECK_API.md) and [HEALTH_CHECK_QUICK_REF.md](./HEALTH_CHECK_QUICK_REF.md)
+
+---
+
 ### 1. User Management
 
 #### Create User

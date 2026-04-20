@@ -33,7 +33,9 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
-    # Database - Read from environment variables
+    # Database - Prefer Neon DB in deployed environments
+    db_url: str = Field(default="", validation_alias="DB_URL")
+    neon_db_url: str = Field(default="", validation_alias="NEON_DB_URL")
     mysql_host: str = Field(default="localhost", validation_alias="MYSQL_HOST")
     mysql_user: str = Field(default="root", validation_alias="MYSQL_USER")
     mysql_password: str = Field(default="password", validation_alias="MYSQL_PASSWORD")
@@ -58,9 +60,19 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         """
-        Construct database URL from components.
-        Supports MySQL for local/cloud deployment.
+        Resolve the active database URL.
+
+        Priority:
+        1. DB_URL environment variable
+        2. NEON_DB_URL environment variable
+        3. MySQL components for local development
         """
+        if self.db_url:
+            return self.db_url
+
+        if self.neon_db_url:
+            return self.neon_db_url
+
         return f"mysql+pymysql://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}/{self.mysql_database}"
 
 

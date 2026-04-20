@@ -16,7 +16,13 @@ from app.utils.rate_limiter import limiter
 
 from app.config import get_settings
 from app.database import init_db, get_db
-from app.utils.redis_manager import init_redis, health_check
+from app.utils.redis_manager import init_redis, health_check, get_connection_status, reconnect_redis, close_redis
+from app.utils.health_check import (
+    get_overall_health, 
+    get_detailed_health_report, 
+    get_quick_status,
+    HealthMetrics
+)
 from app.services.price_service import PriceService
 from app.services.user_service import UserService
 from app.security import get_current_user
@@ -111,6 +117,14 @@ async def lifespan(app: FastAPI):
     # ============= SHUTDOWN =============
     logger.info("🛑 Shutting down Trading Platform API...")
     
+    # Close Redis connection
+    try:
+        close_redis()
+        logger.info("✓ Redis connection closed")
+    except Exception as e:
+        logger.warning(f"⚠️  Error closing Redis: {e}")
+    
+    # Cancel price update task
     if price_update_task:
         price_update_task.cancel()
         try:
@@ -168,6 +182,24 @@ async def add_security_headers(request, call_next):
     return response
 
 
+@app.middleware("http")
+async def track_requests(request: Request, call_next):
+    """Track requests and errors for health metrics"""
+    try:
+        HealthMetrics.increment_requests()
+        response = await call_next(request)
+        
+        # Count errors (5xx responses)
+        if response.status_code >= 500:
+            HealthMetrics.increment_errors()
+        
+        return response
+    except Exception as e:
+        HealthMetrics.increment_errors()
+        logger.error(f"Request error: {e}")
+        raise
+
+
 # ============= BACKGROUND TASKS =============
 async def update_prices_background():
     """
@@ -203,23 +235,113 @@ async def update_prices_background():
 
 
 # ============= HEALTH CHECK ENDPOINTS =============
+
 @app.get("/health")
 def health_check_endpoint():
-    """Health check endpoint for monitoring"""
-    try:
-        redis_ok = health_check()
-        return {
-            "status": "healthy" if redis_ok else "degraded",
-            "database": "connected",
-            "redis": "connected" if redis_ok else "disconnected",
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
+    """
+    Basic health check endpoint
+    
+    Response:
+    - status: overall system status (healthy/degraded/unhealthy)
+    - uptime: application uptime
+    - components: status of database and Redis
+    - metrics: server resource usage
+    - requests: request statistics
+    """
+    return get_overall_health()
+
+
+@app.get("/health/quick")
+def health_quick_endpoint():
+    """
+    Quick health check (minimal response, fast)
+    
+    Returns: status (ok/warning/error), uptime, component status
+    """
+    return get_quick_status()
+
+
+@app.get("/health/detailed")
+def health_detailed_endpoint():
+    """
+    Comprehensive detailed health report
+    
+    Includes:
+    - Component health (database, Redis)
+    - Server metrics (CPU, memory, processes)
+    - Health checks indicators
+    - Application statistics
+    """
+    return get_detailed_health_report()
+
+
+@app.get("/health/database")
+def health_database_endpoint():
+    """Check database connectivity"""
+    from app.utils.health_check import check_database_health
+    status = check_database_health()
+    return {
+        "component": "database",
+        "status": "✅ Connected" if status["connected"] else "❌ Disconnected",
+        "details": status,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/health/redis")
+def health_redis_endpoint():
+    """Check Redis connectivity"""
+    from app.utils.health_check import check_redis_health
+    status = check_redis_health()
+    return {
+        "component": "redis",
+        "status": status["connection_status"],
+        "connected": status["connected"],
+        "details": status["details"],
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/health/metrics")
+def health_metrics_endpoint():
+    """Get server metrics (CPU, memory, processes)"""
+    from app.utils.health_check import get_server_metrics
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "uptime_seconds": HealthMetrics.get_uptime_seconds(),
+        "uptime_formatted": HealthMetrics.get_uptime_formatted(),
+        "requests_total": HealthMetrics.request_count,
+        "errors_total": HealthMetrics.error_count,
+        "error_rate_percent": round(
+            (HealthMetrics.error_count / max(HealthMetrics.request_count, 1)) * 100, 2
+        ) if HealthMetrics.request_count > 0 else 0,
+        "server_resources": get_server_metrics()
+    }
+
+
+@app.get("/redis/status")
+def redis_status_endpoint():
+    """Get detailed Redis connection status"""
+    status = health_check()
+    return {
+        "connection_status": get_connection_status(),
+        "details": status,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.post("/redis/reconnect")
+def redis_reconnect_endpoint():
+    """Manually trigger Redis reconnection"""
+    logger.info("🔄 Manual Redis reconnection triggered")
+    success = reconnect_redis()
+    
+    return {
+        "success": success,
+        "status": get_connection_status(),
+        "details": health_check(),
+        "timestamp": datetime.now().isoformat()
+    }
 
 
 @app.get("/")
@@ -231,6 +353,16 @@ def root():
         "description": "A production-ready mini trading platform",
         "docs": "/docs",
         "redoc": "/redoc",
+        "health_endpoints": {
+            "GET /health": "Overall system health",
+            "GET /health/quick": "Quick status check",
+            "GET /health/detailed": "Detailed report with metrics",
+            "GET /health/database": "Database status only",
+            "GET /health/redis": "Redis status only",
+            "GET /health/metrics": "Server metrics (CPU, memory)",
+            "GET /redis/status": "Redis connection details",
+            "POST /redis/reconnect": "Trigger Redis reconnection"
+        },
         "status": "running"
     }
 
@@ -243,52 +375,59 @@ app.include_router(market.router)
 
 
 # ============= WEBSOCKET ENDPOINT =============
-@app.websocket("/ws")
+@app.websocket("/ws/{user_id}")
 async def websocket_endpoint(
+    user_id: int,
     websocket: WebSocket,
-    token: str = Query(...),  # ✅ FIXED: Require JWT token
+    token: str = Query(None),  # Optional JWT token for authentication
     db=Depends(get_db)
 ):
     """
-    ✅ FIXED: WebSocket endpoint with JWT authentication
+    ✅ WebSocket endpoint with user_id path parameter
+    
+    Path Parameter:
+    - user_id: User ID from path (required)
     
     Query Parameter:
-    - token: JWT token from login (required)
+    - token: JWT token from login (optional for extra security)
     
     Behavior:
-    - Validates JWT token before accepting connection
+    - Accepts WebSocket connections for specific user
     - Broadcasts order execution notifications
     - Broadcasts real-time price updates
     - Maintains connection until client disconnects
     
     Usage:
     ```
-    ws://localhost:8000/ws?token=<JWT_TOKEN>
+    ws://localhost:8000/ws/37
+    ws://localhost:8000/ws/37?token=<JWT_TOKEN>  (with authentication)
     ```
     """
     try:
-        # ✅ FIXED: Validate JWT token
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id = payload.get("sub")
-        if not user_id:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
+        # Verify user exists in database
+        user = UserService.get_user(db, user_id)
+        if not user:
+            logger.warning(f"WebSocket connection rejected: User {user_id} not found")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="User not found")
             return
         
-        user_id = int(user_id)
+        # ✅ Optional: Validate JWT token if provided for extra security
+        if token:
+            try:
+                payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+                token_user_id = payload.get("sub")
+                if not token_user_id or int(token_user_id) != user_id:
+                    logger.warning(f"WebSocket token mismatch: Token user {token_user_id} != {user_id}")
+                    await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Token mismatch")
+                    return
+            except JWTError as e:
+                logger.warning(f"Invalid JWT token for user {user_id}: {e}")
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
+                return
         
-    except JWTError:
-        logger.warning(f"Invalid JWT token attempted")
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
-        return
     except Exception as e:
-        logger.error(f"WebSocket auth error: {e}")
+        logger.error(f"WebSocket auth error for user {user_id}: {e}")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Authentication failed")
-        return
-    
-    # Verify user exists
-    user = UserService.get_user(db, user_id)
-    if not user:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="User not found")
         return
     
     # Accept connection
