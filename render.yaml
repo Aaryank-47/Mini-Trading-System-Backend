@@ -1,0 +1,15 @@
+git add render.yaml requirements.txt
+git commit -m "Add render.yaml deployment config"
+git push origin mainservices:
+  - type: web
+    name: trading-platform-api
+    runtime: python
+    pythonVersion: 3.11
+    plan: free
+    buildCommand: |
+      pip install --upgrade pip setuptools wheel
+      pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
