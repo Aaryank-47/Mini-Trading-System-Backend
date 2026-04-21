@@ -12,6 +12,7 @@ import logging
 import time
 import threading
 import ssl
+import socket
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -48,12 +49,18 @@ class RedisConnectionManager:
                     "decode_responses": True,
                     "socket_connect_timeout": self.connection_timeout,
                     "socket_keepalive": True,
-                    "socket_keepalive_options": {
-                        1: 1,  # TCP_KEEPIDLE
-                        2: 1,  # TCP_KEEPINTVL
-                        3: 1   # TCP_KEEPCNT
-                    }
                 }
+
+                keepalive_options = {}
+                if hasattr(socket, "TCP_KEEPIDLE"):
+                    keepalive_options[socket.TCP_KEEPIDLE] = 1
+                if hasattr(socket, "TCP_KEEPINTVL"):
+                    keepalive_options[socket.TCP_KEEPINTVL] = 1
+                if hasattr(socket, "TCP_KEEPCNT"):
+                    keepalive_options[socket.TCP_KEEPCNT] = 1
+
+                if keepalive_options:
+                    pool_kwargs["socket_keepalive_options"] = keepalive_options
 
                 if use_ssl:
                     # redis-py 5 with rediss:// should use SSLConnection (do not pass ssl=).
