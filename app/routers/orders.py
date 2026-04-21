@@ -63,13 +63,21 @@ async def create_order(
         
         order = await run_in_threadpool(OrderService.execute_order, db, order_data)
 
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Order failed"
+            )
+
         try:
             # Send real-time order event from the active app event loop.
             await _send_order_notification(order_data.user_id, order)
         except Exception as ws_error:
             logger.warning(f"Failed to send WebSocket notification: {ws_error}")
-        
-        return order
+
+        response = OrderResponse.from_orm(order)
+        logger.info(f"Returning order response id={response.id} user_id={response.user_id}")
+        return response
 
     except HTTPException:
         # Preserve auth and validation HTTP responses (e.g., 403 ownership violations)

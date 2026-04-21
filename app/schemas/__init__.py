@@ -46,6 +46,7 @@ class UserResponse(BaseModel):
     updated_at: datetime
     
     class Config:
+        orm_mode = True
         from_attributes = True
 
 
@@ -58,6 +59,7 @@ class WalletResponse(BaseModel):
     updated_at: datetime
     
     class Config:
+        orm_mode = True
         from_attributes = True
 
 
@@ -90,6 +92,7 @@ class OrderResponse(BaseModel):
     updated_at: datetime
     
     class Config:
+        orm_mode = True
         from_attributes = True
 
 
@@ -105,6 +108,7 @@ class OrderHistoryResponse(BaseModel):
     created_at: datetime
     
     class Config:
+        orm_mode = True
         from_attributes = True
 
 
@@ -119,6 +123,7 @@ class PositionResponse(BaseModel):
     updated_at: datetime
     
     class Config:
+        orm_mode = True
         from_attributes = True
 
 
