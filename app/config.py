@@ -3,8 +3,12 @@ Configuration module for the Trading Platform API
 Manages environment variables and app settings
 Securely loads configuration from .env files and environment variables
 """
-from pydantic  import BaseSettings
-from pydantic import Field
+try:
+    # Pydantic v2 provides a v1-compat namespace.
+    from pydantic.v1 import BaseSettings, Field
+except ImportError:
+    # Fallback for pure Pydantic v1 environments.
+    from pydantic import BaseSettings, Field
 from functools import lru_cache
 import os
 
