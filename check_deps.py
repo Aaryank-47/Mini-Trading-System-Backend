@@ -13,7 +13,7 @@ def test_imports():
         ("FastAPI", "from fastapi import FastAPI"),
         ("Uvicorn", "from uvicorn import run"),
         ("SQLAlchemy", "from sqlalchemy import create_engine"),
-        ("Pydantic Settings", "from pydantic_settings import BaseSettings"),
+        ("Pydantic Settings", "from pydantic import BaseSettings"),
         ("Pydantic", "from pydantic import BaseModel"),
         ("PyMySQL", "import pymysql"),
         ("Redis", "import redis"),

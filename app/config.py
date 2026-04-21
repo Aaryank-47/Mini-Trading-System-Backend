@@ -3,7 +3,7 @@ Configuration module for the Trading Platform API
 Manages environment variables and app settings
 Securely loads configuration from .env files and environment variables
 """
-from pydantic_settings import BaseSettings
+from pydantic  import BaseSettings
 from pydantic import Field
 from functools import lru_cache
 import os
