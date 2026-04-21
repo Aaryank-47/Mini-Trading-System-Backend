@@ -4,6 +4,7 @@ Portfolio and position API routes
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from decimal import Decimal
 from app.database import get_db
 from app.schemas import PortfolioResponse, PortfolioItem
 from app.services.user_service import UserService
@@ -134,8 +135,11 @@ def get_positions(
         if current_price is None:
             continue
         
+        # Convert current_price to Decimal to match position.average_price type
+        current_price_decimal = Decimal(str(current_price))
+        
         total_invested_in_position = position.quantity * position.average_price
-        current_value = position.quantity * current_price
+        current_value = position.quantity * current_price_decimal
         unrealized_pnl = current_value - total_invested_in_position
         
         pnl_percentage = 0.0
@@ -146,7 +150,7 @@ def get_positions(
             symbol=position.symbol,
             quantity=position.quantity,
             average_price=position.average_price,
-            current_price=current_price,
+            current_price=current_price_decimal,
             total_invested=total_invested_in_position,
             current_value=current_value,
             unrealized_pnl=unrealized_pnl,

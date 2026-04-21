@@ -4,7 +4,7 @@ Pytest configuration and fixtures for the Trading Platform Backend
 import os
 import sys
 import pytest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Set test database URL BEFORE importing anything from app
 os.environ['DATABASE_URL'] = "sqlite:///:memory:"
@@ -70,8 +70,17 @@ def db():
 def client(db):
     """FastAPI test client fixture"""
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
+    with patch("app.main.init_db", return_value=None), \
+         patch("app.main.init_redis", return_value=None), \
+         patch("app.main.close_redis", return_value=None), \
+         patch("app.main.PriceService.initialize_prices", return_value=None), \
+         patch("app.main.asyncio.create_task") as create_task_mock:
+        task_mock = AsyncMock()
+        task_mock.cancel = MagicMock()
+        create_task_mock.return_value = task_mock
+
+        with TestClient(app) as test_client:
+            yield test_client
     app.dependency_overrides.clear()
 
 
@@ -148,3 +157,27 @@ def invalid_order_data():
         {"user_id": 1, "symbol": "SBIN", "qty": 100, "side": "INVALID"},  # Invalid side
         {"user_id": 1, "symbol": "SBIN", "qty": 2000000, "side": "BUY"},  # Qty > 1M
     ]
+
+
+@pytest.fixture(scope="function")
+def empty_market_prices():
+    """Empty market prices payload for no-data scenarios."""
+    return {}
+
+
+@pytest.fixture(scope="function")
+def large_market_prices():
+    """Generate deterministic large market data set (1000 symbols)."""
+    return {f"SYM{i:04d}": float(100 + i) for i in range(1000)}
+
+
+@pytest.fixture(scope="function")
+def websocket_clients_100():
+    """Create 100 websocket mocks for stress broadcasting tests."""
+    clients = []
+    for _ in range(100):
+        ws = AsyncMock()
+        ws.accept = AsyncMock()
+        ws.send_json = AsyncMock()
+        clients.append(ws)
+    return clients

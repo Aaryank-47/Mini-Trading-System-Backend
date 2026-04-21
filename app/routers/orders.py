@@ -12,8 +12,8 @@ from app.security import get_current_user, verify_user_ownership
 from app.websocket import connection_manager
 from datetime import datetime
 from typing import List
-import asyncio
 import logging
+from starlette.concurrency import run_in_threadpool
 
 from app.utils.rate_limiter import limiter
 
@@ -27,7 +27,7 @@ router = APIRouter(
 
 @router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
-def create_order(
+async def create_order(
     request: Request,
     order_data: OrderCreate,
     current_user_id: int = Depends(get_current_user),
@@ -61,15 +61,20 @@ def create_order(
                 detail=f"User {order_data.user_id} not found"
             )
         
-        order = OrderService.execute_order(db, order_data)
-        
+        order = await run_in_threadpool(OrderService.execute_order, db, order_data)
+
         try:
-            asyncio.create_task(_send_order_notification(order_data.user_id, order))
+            # Send real-time order event from the active app event loop.
+            await _send_order_notification(order_data.user_id, order)
         except Exception as ws_error:
             logger.warning(f"Failed to send WebSocket notification: {ws_error}")
         
         return order
-        
+
+    except HTTPException:
+        # Preserve auth and validation HTTP responses (e.g., 403 ownership violations)
+        raise
+
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

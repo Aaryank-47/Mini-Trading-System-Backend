@@ -1,71 +1,154 @@
-"""
-WebSocket implementation tests for Trading Platform Backend
-Tests connection management, authentication, broadcasting, and real-time updates
-"""
+"""WebSocket tests for connection auth, broadcast behavior, and load scenarios."""
+import asyncio
+from datetime import datetime
+from decimal import Decimal
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, MagicMock, patch
-import json
-from app.websocket import connection_manager, ConnectionManager
+from fastapi import status
+
 from app.schemas import OrderExecutedMessage, PriceUpdateMessage
+from app.websocket import ConnectionManager
 
 
 class TestWebSocketConnection:
-    """Test WebSocket connection establishment and authentication"""
-    
-    @pytest.mark.timeout(10)
-    def test_websocket_connection_valid_token(self, client, test_user_token, test_user):
-        """Test WebSocket connection with valid JWT token"""
-        try:
-            with client.websocket_connect(f"/ws?token={test_user_token}") as websocket:
-                assert websocket is not None
-        except Exception as e:
-            assert "101" in str(e) or "connection" in str(e).lower()
-    
-    @pytest.mark.timeout(10)
-    def test_websocket_connection_invalid_token(self, client):
-        """Test WebSocket connection with invalid JWT token"""
-        with pytest.raises(Exception):
-            with client.websocket_connect("/ws?token=invalid.token.here") as websocket:
-                pass
-    
-    @pytest.mark.timeout(10)
-    def test_websocket_connection_missing_token(self, client):
-        """Test WebSocket connection without token"""
-        with pytest.raises(Exception):
-            with client.websocket_connect("/ws") as websocket:
-                pass
+    """Test WebSocket connection establishment and authentication."""
+
+    @pytest.mark.websocket
+    @pytest.mark.asyncio
+    async def test_endpoint_accepts_valid_user_and_optional_token(self, test_user, test_user_token):
+        """Endpoint should connect and disconnect cleanly for valid user/token."""
+        from app import main as main_module
+
+        websocket = AsyncMock()
+        websocket.receive_text = AsyncMock(side_effect=["ping", Exception("disconnect")])
+
+        with patch.object(main_module.UserService, "get_user", return_value=test_user), \
+             patch.object(main_module.connection_manager, "connect", new_callable=AsyncMock) as connect_mock, \
+             patch.object(main_module.connection_manager, "disconnect", new_callable=AsyncMock) as disconnect_mock:
+            await main_module.websocket_endpoint(
+                user_id=test_user.id,
+                websocket=websocket,
+                token=test_user_token,
+                db=object(),
+            )
+
+        connect_mock.assert_awaited_once()
+        disconnect_mock.assert_awaited_once()
+        websocket.close.assert_not_called()
+
+    @pytest.mark.websocket
+    @pytest.mark.asyncio
+    async def test_endpoint_rejects_invalid_token(self, test_user):
+        """Invalid token should close websocket with policy violation."""
+        from app import main as main_module
+
+        websocket = AsyncMock()
+
+        with patch.object(main_module.UserService, "get_user", return_value=test_user), \
+             patch.object(main_module.connection_manager, "connect", new_callable=AsyncMock) as connect_mock:
+            await main_module.websocket_endpoint(
+                user_id=test_user.id,
+                websocket=websocket,
+                token="invalid.token",
+                db=object(),
+            )
+
+        websocket.close.assert_awaited_once()
+        assert websocket.close.await_args.kwargs["code"] == status.WS_1008_POLICY_VIOLATION
+        connect_mock.assert_not_called()
+
+    @pytest.mark.websocket
+    @pytest.mark.asyncio
+    async def test_endpoint_rejects_token_user_mismatch(self, test_user, second_user_token):
+        """Token user and path user mismatch should be rejected."""
+        from app import main as main_module
+
+        websocket = AsyncMock()
+
+        with patch.object(main_module.UserService, "get_user", return_value=test_user), \
+             patch.object(main_module.connection_manager, "connect", new_callable=AsyncMock) as connect_mock:
+            await main_module.websocket_endpoint(
+                user_id=test_user.id,
+                websocket=websocket,
+                token=second_user_token,
+                db=object(),
+            )
+
+        websocket.close.assert_awaited_once()
+        assert websocket.close.await_args.kwargs["reason"] == "Token mismatch"
+        connect_mock.assert_not_called()
+
+    @pytest.mark.websocket
+    @pytest.mark.asyncio
+    async def test_endpoint_rejects_unknown_user(self):
+        """Unknown user should be rejected before websocket accept."""
+        from app import main as main_module
+
+        websocket = AsyncMock()
+
+        with patch.object(main_module.UserService, "get_user", return_value=None), \
+             patch.object(main_module.connection_manager, "connect", new_callable=AsyncMock) as connect_mock:
+            await main_module.websocket_endpoint(
+                user_id=999999,
+                websocket=websocket,
+                token=None,
+                db=object(),
+            )
+
+        websocket.close.assert_awaited_once()
+        assert websocket.close.await_args.kwargs["reason"] == "User not found"
+        connect_mock.assert_not_called()
 
 
 class TestWebSocketMessages:
-    """Test WebSocket message handling and broadcasting"""
-    
-    @pytest.mark.timeout(10)
-    def test_websocket_receive_client_message(self, client, test_user_token, test_user):
-        """Test WebSocket can receive and handle client messages"""
-        try:
-            with client.websocket_connect(f"/ws?token={test_user_token}") as websocket:
-                websocket.send_text("test message")
-                assert websocket is not None
-        except Exception as e:
-            # WebSocket tests with TestClient may fail in test env, that's OK
-            pass
-    
-    @pytest.mark.timeout(10)
-    def test_websocket_receive_json_message(self, client, test_user_token, test_user):
-        """Test WebSocket can receive JSON messages from client"""
-        try:
-            with client.websocket_connect(f"/ws?token={test_user_token}") as websocket:
-                test_data = {"action": "subscribe", "channel": "prices"}
-                websocket.send_json(test_data)
-                assert websocket is not None
-        except Exception as e:
-            # WebSocket tests with TestClient may fail in test env, that's OK
-            pass
+    """Test message handling from client side."""
+
+    @pytest.mark.websocket
+    @pytest.mark.asyncio
+    async def test_endpoint_receives_text_message(self, test_user):
+        """Endpoint should consume incoming text message and keep loop alive."""
+        from app import main as main_module
+
+        websocket = AsyncMock()
+        websocket.receive_text = AsyncMock(side_effect=["hello-server", Exception("disconnect")])
+
+        with patch.object(main_module.UserService, "get_user", return_value=test_user), \
+             patch.object(main_module.connection_manager, "connect", new_callable=AsyncMock), \
+             patch.object(main_module.connection_manager, "disconnect", new_callable=AsyncMock):
+            await main_module.websocket_endpoint(
+                user_id=test_user.id,
+                websocket=websocket,
+                token=None,
+                db=object(),
+            )
+
+        assert websocket.receive_text.await_count == 2
+
+    @pytest.mark.websocket
+    @pytest.mark.asyncio
+    async def test_endpoint_handles_receive_error_and_disconnects(self, test_user):
+        """Receive errors should trigger managed disconnect path."""
+        from app import main as main_module
+
+        websocket = AsyncMock()
+        websocket.receive_text = AsyncMock(side_effect=Exception("network error"))
+
+        with patch.object(main_module.UserService, "get_user", return_value=test_user), \
+             patch.object(main_module.connection_manager, "connect", new_callable=AsyncMock), \
+             patch.object(main_module.connection_manager, "disconnect", new_callable=AsyncMock) as disconnect_mock:
+            await main_module.websocket_endpoint(
+                user_id=test_user.id,
+                websocket=websocket,
+                token=None,
+                db=object(),
+            )
+
+        disconnect_mock.assert_awaited_once()
 
 
 class TestConnectionManager:
-    """Test ConnectionManager functionality"""
+    """Test ConnectionManager functionality."""
     
     @pytest.mark.asyncio
     async def test_connection_manager_connect(self):
@@ -178,7 +261,7 @@ class TestConnectionManager:
     
     @pytest.mark.asyncio
     async def test_connection_manager_handles_send_errors(self):
-        """Test manager handles errors when sending messages"""
+        """Send failures should not block healthy sockets."""
         manager = ConnectionManager()
         
         mock_ws1 = AsyncMock()
@@ -193,6 +276,7 @@ class TestConnectionManager:
         message = {"type": "test"}
         await manager.broadcast_to_user(user_id, message)
         
+        assert manager.get_connection_count(user_id) == 1
         mock_ws2.send_json.assert_called_once_with(message)
     
     @pytest.mark.asyncio
@@ -210,43 +294,38 @@ class TestConnectionManager:
 
 
 class TestWebSocketIntegration:
-    """Integration tests for WebSocket with actual API"""
-    
-    @pytest.mark.timeout(10)
-    def test_websocket_order_execution_notification(self, client, test_user_token, test_user, db):
-        """Test WebSocket receives order execution notification"""
-        try:
-            with client.websocket_connect(f"/ws?token={test_user_token}") as websocket:
-                assert websocket is not None
-        except Exception as e:
-            pass
-    
-    @pytest.mark.timeout(10)
-    def test_websocket_price_update_notification(self, client, test_user_token):
-        """Test WebSocket receives real-time price update"""
-        try:
-            with client.websocket_connect(f"/ws?token={test_user_token}") as websocket:
-                assert websocket is not None
-        except Exception as e:
-            pass
-    
-    @pytest.mark.timeout(10)
-    def test_multiple_users_different_websockets(self, client, test_user_token, second_user_token):
-        """Test multiple users can connect simultaneously"""
-        try:
-            with client.websocket_connect(f"/ws?token={test_user_token}") as ws1:
-                try:
-                    with client.websocket_connect(f"/ws?token={second_user_token}") as ws2:
-                        assert ws1 is not None
-                        assert ws2 is not None
-                except Exception:
-                    pass
-        except Exception:
-            pass
+    """Integration tests for WebSocket with FastAPI route."""
+
+    @pytest.mark.websocket
+    @pytest.mark.asyncio
+    async def test_multiple_users_endpoint_calls_are_isolated(self, test_user, second_test_user):
+        """Separate endpoint calls for separate users should remain isolated."""
+        from app import main as main_module
+
+        ws1 = AsyncMock()
+        ws1.receive_text = AsyncMock(side_effect=Exception("disconnect"))
+        ws2 = AsyncMock()
+        ws2.receive_text = AsyncMock(side_effect=Exception("disconnect"))
+
+        def fake_get_user(_, user_id):
+            if user_id == test_user.id:
+                return test_user
+            if user_id == second_test_user.id:
+                return second_test_user
+            return None
+
+        with patch.object(main_module.UserService, "get_user", side_effect=fake_get_user), \
+             patch.object(main_module.connection_manager, "connect", new_callable=AsyncMock) as connect_mock, \
+             patch.object(main_module.connection_manager, "disconnect", new_callable=AsyncMock) as disconnect_mock:
+            await main_module.websocket_endpoint(test_user.id, ws1, None, object())
+            await main_module.websocket_endpoint(second_test_user.id, ws2, None, object())
+
+        assert connect_mock.await_count == 2
+        assert disconnect_mock.await_count == 2
 
 
 class TestWebSocketGlobalManager:
-    """Test the global connection manager instance"""
+    """Test global connection manager access."""
     
     @pytest.mark.asyncio
     async def test_global_connection_manager_instance(self):
@@ -271,21 +350,26 @@ class TestWebSocketGlobalManager:
 
 
 class TestWebSocketRobustness:
-    """Test WebSocket robustness and error handling"""
-    
-    @pytest.mark.timeout(10)
-    def test_websocket_user_not_found(self, client):
-        """Test WebSocket connection fails if user doesn't exist"""
-        from app.security import create_access_token
-        
-        non_existent_user_id = 99999
-        fake_token = create_access_token(non_existent_user_id)
-        
-        try:
-            with client.websocket_connect(f"/ws?token={fake_token}") as websocket:
-                pass
-        except Exception:
-            pass
+    """Test robustness and error handling around message delivery."""
+
+    @pytest.mark.asyncio
+    async def test_broadcast_removes_only_failing_socket(self):
+        """One failing socket must not prevent delivery to healthy sockets."""
+        manager = ConnectionManager()
+        user_id = 1
+
+        broken_ws = AsyncMock()
+        healthy_ws = AsyncMock()
+        broken_ws.send_json.side_effect = Exception("write failed")
+
+        await manager.connect(user_id, broken_ws)
+        await manager.connect(user_id, healthy_ws)
+
+        payload = {"event": "price_update", "symbol": "SBIN", "price": 500.25}
+        await manager.broadcast_to_user(user_id, payload)
+
+        assert manager.get_connection_count(user_id) == 1
+        healthy_ws.send_json.assert_called_once_with(payload)
     
     @pytest.mark.asyncio
     async def test_connection_manager_handles_none_user_id(self):
@@ -314,7 +398,7 @@ class TestWebSocketRobustness:
 
 
 class TestWebSocketConcurrency:
-    """Test WebSocket concurrent operations"""
+    """Test WebSocket concurrent operations."""
     
     @pytest.mark.asyncio
     async def test_concurrent_connects_same_user(self):
@@ -351,14 +435,77 @@ class TestWebSocketConcurrency:
         assert mock_ws2.send_json.call_count == 3
 
 
+class TestWebSocketNoDataHandling:
+    """Validate behavior when market data is empty or missing."""
+
+    @pytest.mark.asyncio
+    async def test_background_update_with_no_prices_does_not_broadcast(self):
+        """No market prices means no broadcasts should be emitted in that cycle."""
+        from app import main as main_module
+
+        with patch.object(main_module.PriceService, "update_prices", return_value={}), \
+             patch.object(main_module.connection_manager, "broadcast_to_all", new_callable=AsyncMock) as broadcast_mock, \
+             patch("app.main.asyncio.sleep", new=AsyncMock(side_effect=[None, asyncio.CancelledError])):
+            await main_module.update_prices_background()
+
+        broadcast_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_background_update_broadcasts_each_symbol(self, large_market_prices):
+        """Non-empty price updates should broadcast one message per symbol."""
+        from app import main as main_module
+
+        sample_prices = dict(list(large_market_prices.items())[:20])
+        with patch.object(main_module.PriceService, "update_prices", return_value=sample_prices), \
+             patch.object(main_module.connection_manager, "broadcast_to_all", new_callable=AsyncMock) as broadcast_mock, \
+             patch("app.main.asyncio.sleep", new=AsyncMock(side_effect=[None, asyncio.CancelledError])):
+            await main_module.update_prices_background()
+
+        assert broadcast_mock.await_count == len(sample_prices)
+        first_payload = broadcast_mock.await_args_list[0].args[0]
+        assert first_payload["event"] == "price_update"
+        assert "symbol" in first_payload
+        assert "price" in first_payload
+        assert "timestamp" in first_payload
+
+
+class TestWebSocketHighLoad:
+    """Stress behavior with large symbol set and concurrent clients."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.timeout(30)
+    @pytest.mark.performance
+    @pytest.mark.stress
+    async def test_broadcast_high_volume_prices_to_100_clients(
+        self,
+        large_market_prices,
+        websocket_clients_100,
+    ):
+        """Broadcast 1000 symbol updates to 100 clients and verify delivery counts."""
+        manager = ConnectionManager()
+
+        for idx, ws in enumerate(websocket_clients_100, start=1):
+            await manager.connect(idx, ws)
+
+        for symbol, price in large_market_prices.items():
+            message = {
+                "event": "price_update",
+                "symbol": symbol,
+                "price": price,
+                "timestamp": datetime.now().isoformat(),
+            }
+            await manager.broadcast_to_all(message)
+
+        expected_messages_per_client = len(large_market_prices)
+        for ws in websocket_clients_100:
+            assert ws.send_json.await_count == expected_messages_per_client
+
+
 class TestWebSocketSchemas:
-    """Test WebSocket message schemas"""
+    """Test WebSocket message schemas."""
     
     def test_order_executed_message_schema(self):
         """Test OrderExecutedMessage schema validation"""
-        from datetime import datetime
-        from decimal import Decimal
-        
         message_data = {
             "event": "order_executed",
             "symbol": "AAPL",
@@ -378,9 +525,6 @@ class TestWebSocketSchemas:
     
     def test_price_update_message_schema(self):
         """Test PriceUpdateMessage schema validation"""
-        from datetime import datetime
-        from decimal import Decimal
-        
         message_data = {
             "event": "price_update",
             "symbol": "AAPL",
