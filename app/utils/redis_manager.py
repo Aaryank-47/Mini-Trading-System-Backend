@@ -11,6 +11,7 @@ import json
 import logging
 import time
 import threading
+import ssl
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -30,46 +31,83 @@ class RedisConnectionManager:
         self.connection_timeout = 5  # seconds
         self.health_check_thread: Optional[threading.Thread] = None
         self.lock = threading.Lock()
+        self._reconnect_log_cooldown = 10  # seconds
+        self._last_reconnect_log_time = 0.0
+        self._reconnect_cooldown_after_max = 30  # seconds
+        self._next_reconnect_allowed_at = 0.0
+        self._last_max_attempt_log_time = 0.0
     
     def connect(self) -> bool:
         """Establish Redis connection with error handling"""
         with self.lock:
             try:
-                logger.info(f"🔄 Attempting to connect to Redis: {self.redis_url}")
-                
-                # Create connection pool with timeout
-                pool = ConnectionPool.from_url(
-                    self.redis_url,
-                    decode_responses=True,
-                    socket_connect_timeout=self.connection_timeout,
-                    socket_keepalive=True,
-                    socket_keepalive_options={
+                use_ssl = self.redis_url.startswith("rediss://")
+                logger.info(f"🔄 Connecting to Redis (SSL={use_ssl}): {self.redis_url}")
+
+                pool_kwargs = {
+                    "decode_responses": True,
+                    "socket_connect_timeout": self.connection_timeout,
+                    "socket_keepalive": True,
+                    "socket_keepalive_options": {
                         1: 1,  # TCP_KEEPIDLE
                         2: 1,  # TCP_KEEPINTVL
                         3: 1   # TCP_KEEPCNT
                     }
-                )
-                
-                self.client = Redis(connection_pool=pool)
-                
-                # Test connection
-                self.client.ping()
+                }
+
+                if use_ssl:
+                    # redis-py 5 with rediss:// should use SSLConnection (do not pass ssl=).
+                    # Upstash commonly works with CERT_NONE in hosted/serverless environments.
+                    pool_kwargs["connection_class"] = redis.SSLConnection
+                    pool_kwargs["ssl_cert_reqs"] = ssl.CERT_NONE
+
+                pool = ConnectionPool.from_url(self.redis_url, **pool_kwargs)
+                client = Redis(connection_pool=pool)
+
+                try:
+                    client.ping()
+                except Exception as ping_error:
+                    self.is_connected = False
+                    self.client = None
+                    logger.warning(f"⚠️  Redis ping failed after client init: {ping_error}")
+                    return False
+
+                self.client = client
                 self.is_connected = True
                 self.reconnect_attempts = 0
-                logger.info("✅ Connected to Redis successfully!")
+                self._next_reconnect_allowed_at = 0.0
+                logger.info(f"✅ Connected to Redis successfully (SSL={use_ssl})")
                 return True
                 
             except (ConnectionError, TimeoutError) as e:
                 self.is_connected = False
+                self.client = None
                 logger.warning(f"⚠️  Redis connection failed: {e}")
                 return False
             except Exception as e:
                 self.is_connected = False
+                self.client = None
                 logger.error(f"❌ Unexpected Redis error: {e}")
                 return False
     
     def reconnect(self) -> bool:
         """Attempt to reconnect with exponential backoff"""
+        now = time.time()
+
+        # After max retries, pause reconnect attempts for a cooldown window.
+        if self.reconnect_attempts >= self.max_reconnect_attempts:
+            if now < self._next_reconnect_allowed_at:
+                if now - self._last_max_attempt_log_time >= self._reconnect_log_cooldown:
+                    wait_seconds = int(self._next_reconnect_allowed_at - now)
+                    logger.warning(
+                        f"⚠️  Redis reconnect cooldown active, next retry in {wait_seconds}s"
+                    )
+                    self._last_max_attempt_log_time = now
+                return False
+
+            # Cooldown elapsed: reset attempts and start a new retry window.
+            self.reconnect_attempts = 0
+
         if self.reconnect_attempts >= self.max_reconnect_attempts:
             logger.error(f"❌ Max reconnection attempts ({self.max_reconnect_attempts}) reached")
             return False
@@ -80,8 +118,15 @@ class RedisConnectionManager:
         
         logger.info(f"⏳ Waiting {delay}s before reconnection attempt {self.reconnect_attempts}/{self.max_reconnect_attempts}")
         time.sleep(delay)
-        
-        return self.connect()
+
+        connected = self.connect()
+        if not connected and self.reconnect_attempts >= self.max_reconnect_attempts:
+            self._next_reconnect_allowed_at = time.time() + self._reconnect_cooldown_after_max
+            logger.error(
+                f"❌ Max reconnection attempts ({self.max_reconnect_attempts}) reached; "
+                f"cooling down for {self._reconnect_cooldown_after_max}s"
+            )
+        return connected
     
     def get_client(self) -> Optional[Redis]:
         """Get Redis client with reconnection attempt if needed"""
@@ -90,11 +135,13 @@ class RedisConnectionManager:
             return self.client
         
         # If not connected, try to reconnect
-        logger.warning("⚠️  Redis client disconnected, attempting to reconnect...")
+        now = time.time()
+        if now - self._last_reconnect_log_time >= self._reconnect_log_cooldown:
+            logger.warning("⚠️  Redis client disconnected, attempting to reconnect...")
+            self._last_reconnect_log_time = now
         if self.reconnect():
             return self.client
-        
-        logger.error("❌ Failed to reconnect to Redis")
+
         return None
     
     def is_healthy(self) -> bool:
@@ -155,6 +202,8 @@ class RedisConnectionManager:
 
 # Global connection manager instance
 redis_manager: Optional[RedisConnectionManager] = None
+_unavailable_price_log_timestamps = {}
+_unavailable_price_log_cooldown = 30  # seconds
 
 
 # ============= PUBLIC API =============
@@ -189,7 +238,11 @@ def set_price(symbol: str, price: float) -> bool:
     try:
         client = get_redis_client()
         if not client:
-            logger.warning(f"⚠️  Cannot set price for {symbol}: Redis unavailable")
+            now = time.time()
+            last_logged = _unavailable_price_log_timestamps.get(symbol, 0.0)
+            if now - last_logged >= _unavailable_price_log_cooldown:
+                logger.warning(f"⚠️  Cannot set price for {symbol}: Redis unavailable")
+                _unavailable_price_log_timestamps[symbol] = now
             return False
         
         key = f"price:{symbol}"
