@@ -62,7 +62,6 @@ async def create_order(
             )
         
         order = await run_in_threadpool(OrderService.execute_order, db, order_data)
-
         if not order:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -76,7 +75,7 @@ async def create_order(
             logger.warning(f"Failed to send WebSocket notification: {ws_error}")
 
         response = OrderResponse.from_orm(order)
-        logger.info(f"Returning order response id={response.id} user_id={response.user_id}")
+        logger.info(f"Returning order response: {response.id}")
         return response
 
     except HTTPException:
