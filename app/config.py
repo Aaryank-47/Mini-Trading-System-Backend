@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     # App info
     app_name: str = "Trading Platform API"
     debug: bool = Field(default=False, validation_alias="DEBUG")
+    allowed_origins: str = Field(default="*", validation_alias="ALLOWED_ORIGINS")
     
     # Security - MUST be set in environment, no default for production
     secret_key: str = Field(

@@ -2,6 +2,7 @@
 User management API routes
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas import UserCreate, UserResponse, TokenResponse, LoginRequest, LoginResponse, AccessTokenResponse
@@ -31,34 +32,34 @@ def register(
 ):
     """
     Register new user and return JWT token
-    
-    Returns:
-    - access_token: JWT token for authentication
-    - token_type: "bearer"
-    - user_id: New user's ID
-    
-    Usage:
-    ```
-    POST /users/register
-    Content-Type: application/json
-    
-    {
-        "name": "John Doe",
-        "email": "john@example.com",
-        "password": "SecurePass123!",
-        "confirm_password": "SecurePass123!"
-    }
-    ```
+    Sets an HttpOnly cookie for the refresh token for enhanced security.
     """
     try:
         user = UserService.create_user(db, user_data)
-        token = create_access_token(user.id)
+        access_token, refresh_token = create_token_pair(user.id)
+        
         logger.info(f"✓ User registered: {user.id} ({user_data.email})")
-        return {
-            "access_token": token,
-            "token_type": "bearer",
-            "user_id": user.id
-        }
+        
+        response = JSONResponse(
+            status_code=status.HTTP_201_CREATED,
+            content={
+                "access_token": access_token,
+                "token_type": "bearer",
+                "user_id": user.id
+            }
+        )
+        
+        # Set HttpOnly cookie for refresh token
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=False if "localhost" in str(request.base_url) else True,
+            samesite="lax",
+            max_age=7 * 24 * 60 * 60  # 7 days
+        )
+        
+        return response
     except ValueError as e:
         logger.warning(f"Registration failed: {e}")
         raise HTTPException(
@@ -82,38 +83,39 @@ def login(
 ):
     """
     Login user with email and password
-    
-    Returns:
-    - access_token: JWT access token (30 minutes expiration)
-    - refresh_token: JWT refresh token (7 days expiration)
-    - token_type: "bearer"
-    - user_id: User's ID
-    - expires_in: Access token expiration in seconds (1800)
-    
-    Usage:
-    ```
-    POST /users/login
-    Content-Type: application/json
-    
-    {
-        "email": "john@example.com",
-        "password": "SecurePass123!"
-    }
-    ```
+    Sets an HttpOnly cookie for the refresh token.
     """
     try:
         user = UserService.authenticate_user(db, login_data.email, login_data.password)
         access_token, refresh_token = create_token_pair(user.id)
         
         logger.info(f"✓ User logged in: {user.id} ({login_data.email})")
+        print("user id for login : ", user.id)
+        print("email for login : ", login_data.email)
         
-        return {
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "bearer",
-            "user_id": user.id,
-            "expires_in": 1800
-        }
+        response = JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "access_token": access_token,
+                "refresh_token": refresh_token, # Keep it in body too for compatibility, but frontend should prefer cookie
+                "token_type": "bearer",
+                "user_id": user.id,
+                "name": user.name,
+                "expires_in": 1800
+            }
+        )
+        
+        # Set HttpOnly cookie for refresh token
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=False if "localhost" in str(request.base_url) else True,
+            samesite="lax",
+            max_age=7 * 24 * 60 * 60  # 7 days
+        )
+        
+        return response
     except ValueError as e:
         logger.warning(f"Login failed: {e}")
         raise HTTPException(
@@ -132,43 +134,38 @@ def login(
 @limiter.limit("30/minute")
 def refresh_token(
     request: Request,
-    refresh_request: dict,
+    refresh_request: dict = None,
     db: Session = Depends(get_db)
 ):
     """
-    Refresh access token using refresh token
-    
-    Returns:
-    - access_token: New JWT access token (30 minutes expiration)
-    - token_type: "bearer"
-    - user_id: User's ID
-    - expires_in: Access token expiration in seconds (1800)
-    
-    Usage:
-    ```
-    POST /users/token/refresh
-    Content-Type: application/json
-    
-    {"refresh_token": "<REFRESH_TOKEN>"}
-    ```
+    Refresh access token using refresh token (from cookie or body)
     """
     try:
-        refresh_token_str = refresh_request.get("refresh_token")
+        # 1. Try to get refresh token from HttpOnly cookie first (more secure)
+        refresh_token_str = request.cookies.get("refresh_token")
+        
+        # 2. Fallback to body if not in cookie (for testing/compatibility)
+        if not refresh_token_str and refresh_request:
+            refresh_token_str = refresh_request.get("refresh_token")
+            
         if not refresh_token_str:
+            logger.warning("Token refresh attempt without refresh_token")
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="refresh_token is required"
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token missing"
             )
+            
         payload = verify_token(refresh_token_str, token_type=TOKEN_TYPE_REFRESH)
         user_id = int(payload.get("sub"))
         user = UserService.get_user(db, user_id)
+        
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found"
             )
+            
         access_token = create_access_token(user_id)
-        
         logger.info(f"✓ Token refreshed for user: {user_id}")
         
         return {

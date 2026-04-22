@@ -57,20 +57,22 @@ def get_portfolio(
     positions = PositionService.get_all_positions(db, user_id)
     
     holdings = []
-    total_invested = 0.0
-    total_current_value = 0.0
-    total_unrealized_pnl = 0.0
+    total_invested = Decimal('0.0')
+    total_current_value = Decimal('0.0')
+    total_unrealized_pnl = Decimal('0.0')
     
     for position in positions:
         current_price = get_price(position.symbol)
         if current_price is None:
             continue
         
-        total_invested_in_position = position.quantity * position.average_price
-        current_value = position.quantity * current_price
+        current_price_decimal = Decimal(str(current_price))
+        
+        total_invested_in_position = Decimal(str(position.quantity)) * position.average_price
+        current_value = Decimal(str(position.quantity)) * current_price_decimal
         unrealized_pnl = current_value - total_invested_in_position
         
-        pnl_percentage = 0.0
+        pnl_percentage = Decimal('0.0')
         if total_invested_in_position > 0:
             pnl_percentage = (unrealized_pnl / total_invested_in_position) * 100
         
@@ -78,7 +80,7 @@ def get_portfolio(
             symbol=position.symbol,
             quantity=position.quantity,
             average_price=position.average_price,
-            current_price=current_price,
+            current_price=current_price_decimal,
             total_invested=total_invested_in_position,
             current_value=current_value,
             unrealized_pnl=unrealized_pnl,
@@ -89,14 +91,17 @@ def get_portfolio(
         total_current_value += current_value
         total_unrealized_pnl += unrealized_pnl
     
-    total_portfolio_value = float(wallet_balance) + total_current_value
-    total_pnl_percentage = 0.0
+    # Calculate totals
+    wallet_balance_decimal = Decimal(str(wallet_balance)) if wallet_balance else Decimal('0.0')
+    total_portfolio_value = wallet_balance_decimal + total_current_value
+    
+    total_pnl_percentage = Decimal('0.0')
     if total_invested > 0:
         total_pnl_percentage = (total_unrealized_pnl / total_invested) * 100
     
     return PortfolioResponse(
         user_id=user_id,
-        wallet_balance=wallet_balance,
+        wallet_balance=wallet_balance_decimal,
         holdings=holdings,
         total_portfolio_value=total_portfolio_value,
         total_invested=total_invested,
@@ -138,11 +143,12 @@ def get_positions(
         # Convert current_price to Decimal to match position.average_price type
         current_price_decimal = Decimal(str(current_price))
         
-        total_invested_in_position = position.quantity * position.average_price
-        current_value = position.quantity * current_price_decimal
+        # Calculate values using Decimal for precision
+        total_invested_in_position = Decimal(str(position.quantity)) * position.average_price
+        current_value = Decimal(str(position.quantity)) * current_price_decimal
         unrealized_pnl = current_value - total_invested_in_position
         
-        pnl_percentage = 0.0
+        pnl_percentage = Decimal('0.0')
         if total_invested_in_position > 0:
             pnl_percentage = (unrealized_pnl / total_invested_in_position) * 100
         

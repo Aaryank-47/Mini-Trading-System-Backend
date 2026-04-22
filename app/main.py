@@ -147,37 +147,36 @@ app = FastAPI(
 
 app.state.limiter = limiter
 
-# Add CORS middleware
-# ✅ FIXED: Explicit allowed origins instead of "*"
-if settings.debug:
-    allowed_origins = [
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://localhost:8001",
-    ]
-else:
-    allowed_origins = [
-        "https://yourdomain.com",
-        "https://www.yourdomain.com",
-    ]
+# CORS Configuration
+# Dynamically load origins from .env (comma-separated string)
+allowed_origins = [
+    origin.strip() 
+    for origin in settings.allowed_origins.split(",") 
+    if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
     max_age=600,
 )
 
 @app.middleware("http")
-async def add_security_headers(request, call_next):
+async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'"
+    
+    # Relax CSP for development or just use sensible defaults for API
+    if not settings.debug:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'"
+    
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
 
