@@ -10,7 +10,7 @@ from app.config import get_settings
 from app.database import init_db
 from app.services.price_service import PriceService
 from app.utils.redis_manager import close_redis, init_redis
-from app.websocket import connection_manager
+from app.websocket import PRICE_UPDATES_CHANNEL, connection_manager, publish_realtime_event, start_realtime_bridge, stop_realtime_bridge
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -28,13 +28,22 @@ async def update_prices_background() -> None:
 
             if updated_prices:
                 for symbol, price in updated_prices.items():
-                    message = {
-                        "event": "price_update",
+                    payload = {
                         "symbol": symbol,
                         "price": price,
-                        "timestamp": datetime.now().isoformat(),
                     }
-                    await connection_manager.broadcast_to_all(message)
+                    published = await asyncio.to_thread(
+                        publish_realtime_event,
+                        PRICE_UPDATES_CHANNEL,
+                        "price_update",
+                        payload,
+                    )
+                    if not published:
+                        await connection_manager.broadcast({
+                            "event": "price_update",
+                            "data": payload,
+                            "timestamp": datetime.now().isoformat(),
+                        })
         except asyncio.CancelledError:
             logger.info("Price update task cancelled")
             break
@@ -85,6 +94,12 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error(f"Failed to start price update task: {exc}")
 
+    try:
+        await connection_manager.start_heartbeat()
+        start_realtime_bridge(connection_manager)
+    except Exception as exc:
+        logger.warning(f"WebSocket realtime bridge could not start: {exc}")
+
     if startup_success:
         logger.info("Application startup completed successfully")
     else:
@@ -107,5 +122,11 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("Price update task stopped")
+
+    try:
+        await stop_realtime_bridge()
+        await connection_manager.stop_heartbeat()
+    except Exception as exc:
+        logger.warning(f"Error stopping WebSocket realtime tasks: {exc}")
 
     logger.info("Application shutdown completed")

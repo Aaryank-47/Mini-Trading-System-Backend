@@ -1,7 +1,8 @@
 """WebSocket API routes."""
+import json
 import logging
 
-from fastapi import APIRouter, Depends, Query, WebSocket, status
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, status
 from jose import JWTError, jwt
 
 from app.config import get_settings
@@ -57,8 +58,27 @@ async def websocket_endpoint(
     try:
         while True:
             data = await websocket.receive_text()
+
+            if not await connection_manager.enforce_message_limit(websocket):
+                await websocket.close(
+                    code=status.WS_1008_POLICY_VIOLATION,
+                    reason="Message limit exceeded",
+                )
+                break
+
+            try:
+                payload = json.loads(data)
+            except Exception:
+                payload = {"event": data} if data else {}
+
+            if payload.get("event") == "pong":
+                await connection_manager.mark_activity(websocket)
+                continue
+
             if data:
-                logger.debug(f"Message from user {user_id}: {data}")
+                logger.debug("Message from user %s: %s", user_id, data)
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnect received for user {user_id}")
     except Exception as exc:
         logger.info(f"WebSocket error for user {user_id}: {exc}")
     finally:
