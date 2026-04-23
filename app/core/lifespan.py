@@ -30,6 +30,7 @@ async def update_prices_background() -> None:
                 for symbol, price in updated_prices.items():
                     payload = {
                         "symbol": symbol,
+                        "symbol_name": PriceService.get_symbol_name(symbol),
                         "price": price,
                     }
                     published = await asyncio.to_thread(

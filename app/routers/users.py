@@ -45,7 +45,9 @@ def register(
             content={
                 "access_token": access_token,
                 "token_type": "bearer",
-                "user_id": user.id
+                "user_id": user.id,
+                "name": user.name,
+                "email": user.email,
             }
         )
         
@@ -101,6 +103,7 @@ def login(
                 "token_type": "bearer",
                 "user_id": user.id,
                 "name": user.name,
+                "email": user.email,
                 "expires_in": 1800
             }
         )
@@ -172,6 +175,8 @@ def refresh_token(
             "access_token": access_token,
             "token_type": "bearer",
             "user_id": user_id,
+            "name": user.name,
+            "email": user.email,
             "expires_in": 1800
         }
     except HTTPException:

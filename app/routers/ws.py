@@ -23,6 +23,7 @@ async def websocket_endpoint(
     db=Depends(get_db),
 ):
     """WebSocket endpoint for user-scoped real-time updates."""
+    await websocket.accept()
     try:
         user = UserService.get_user(db, user_id)
         if not user:

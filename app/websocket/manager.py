@@ -37,7 +37,7 @@ class ConnectionManager:
 
     async def connect(self, user_id: int, websocket: WebSocket) -> None:
         """Accept and store a user connection."""
-        await websocket.accept()
+        now = time.monotonic()
         now = time.monotonic()
 
         async with self._lock:

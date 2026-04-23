@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas import OrderCreate, OrderResponse, OrderHistoryResponse
 from app.services.order_service import OrderService
+from app.services.price_service import PriceService
 from app.services.user_service import UserService
 from app.security import get_current_user, verify_user_ownership
 from app.websocket import connection_manager
@@ -152,6 +153,7 @@ async def _send_order_notification(user_id: int, order):
         "id": order.id,
         "user_id": user_id,
         "symbol": order.symbol,
+        "symbol_name": PriceService.get_symbol_name(order.symbol),
         "quantity": order.quantity,
         "qty": order.quantity,
         "price": float(order.price),

@@ -161,6 +161,8 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user_id: int
+    name: Optional[str] = None
+    email: Optional[str] = None
 
 
 class AccessTokenResponse(BaseModel):
@@ -169,6 +171,8 @@ class AccessTokenResponse(BaseModel):
     token_type: str = "bearer"
     user_id: int
     expires_in: int  # Seconds
+    name: Optional[str] = None
+    email: Optional[str] = None
 
 
 class RefreshTokenResponse(BaseModel):
@@ -185,6 +189,7 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     user_id: int
     expires_in: int
+    email: Optional[str] = None
 
 
 class OrderExecutedMessage(BaseModel):

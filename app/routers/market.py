@@ -33,6 +33,20 @@ def get_prices():
         )
 
 
+@router.get("/symbols")
+def get_symbols():
+    """Return the synthetic symbol catalog with short codes and full names."""
+    return {"symbols": PriceService.get_symbol_catalog()}
+
+
+@router.get("/symbols")
+def get_symbols():
+    """Get the synthetic market symbol catalog with short codes and full names."""
+    return {
+        "symbols": PriceService.get_symbol_catalog()
+    }
+
+
 @router.get("/price/{symbol}")
 def get_symbol_price(symbol: str):
     """
