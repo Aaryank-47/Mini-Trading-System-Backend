@@ -149,12 +149,16 @@ async def _send_order_notification(user_id: int, order):
     """Send order execution notification via WebSocket"""
     message = {
         "event": "order_executed",
+        "id": order.id,
+        "user_id": user_id,
         "symbol": order.symbol,
+        "quantity": order.quantity,
         "qty": order.quantity,
-        "price": order.price,
+        "price": float(order.price),
         "side": order.side.value,
         "status": order.status.value,
-        "total_amount": order.total_amount,
-        "timestamp": order.created_at.isoformat()
+        "total_amount": float(order.total_amount),
+        "created_at": order.created_at.isoformat(),
+        "timestamp": order.created_at.isoformat(),
     }
     await connection_manager.broadcast_to_user(user_id, message)
