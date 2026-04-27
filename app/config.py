@@ -10,7 +10,12 @@ except ImportError:
     # Fallback for pure Pydantic v1 environments.
     from pydantic import BaseSettings, Field
 from functools import lru_cache
+from pathlib import Path
 import os
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_FILE_PATH = BASE_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -57,7 +62,7 @@ class Settings(BaseSettings):
     redis_db: int = 0
     
     class Config:
-        env_file = ".env"
+        env_file = str(ENV_FILE_PATH)
         env_file_encoding = "utf-8"
         case_sensitive = False
         extra = "ignore"
@@ -73,6 +78,12 @@ class Settings(BaseSettings):
         3. MySQL components for local development
         """
         if self.db_url:
+            # Support references like DB_URL=${NEON_DB_URL} in .env
+            if self.db_url.startswith("${") and self.db_url.endswith("}"):
+                env_key = self.db_url[2:-1]
+                referenced_value = os.getenv(env_key, "").strip()
+                if referenced_value:
+                    return referenced_value
             return self.db_url
 
         if self.neon_db_url:

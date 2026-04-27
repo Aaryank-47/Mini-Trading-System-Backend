@@ -73,6 +73,7 @@ _INITIAL_PRICE_RANGES = {
 }
 
 _SYMBOL_LOOKUP = {item["code"]: item for item in SYMBOL_CATALOG}
+_fallback_prices: Dict[str, float] = {}
 
 
 def _get_initial_price(symbol: str) -> float:
@@ -101,6 +102,7 @@ class PriceService:
         
         for symbol in symbols:
             initial_price = _get_initial_price(symbol)
+            _fallback_prices[symbol] = initial_price
             set_price(symbol, initial_price)
         
         logger.info(f"✓ Prices initialized for symbols: {symbols}")
@@ -121,16 +123,20 @@ class PriceService:
         
         for symbol in symbols:
             current_price = get_price(symbol)
+            if current_price is None:
+                current_price = _fallback_prices.get(symbol)
             
             if current_price is None:
                 # Initialize price if not exists
                 initial_price = _get_initial_price(symbol)
+                _fallback_prices[symbol] = initial_price
                 set_price(symbol, initial_price)
                 updated_prices[symbol] = initial_price
             else:
                 # Update with ±2% random change
                 change_percent = random.uniform(-0.02, 0.02)
                 new_price = round(current_price * (1 + change_percent), 2)
+                _fallback_prices[symbol] = new_price
                 set_price(symbol, new_price)
                 updated_prices[symbol] = new_price
         
@@ -148,7 +154,20 @@ class PriceService:
             Dictionary of symbol -> price
         """
         symbols = symbols or DEFAULT_SYMBOLS
-        return get_all_prices(symbols)
+        redis_prices = get_all_prices(symbols)
+        prices: Dict[str, float] = dict(redis_prices)
+
+        for symbol in symbols:
+            if symbol not in prices and symbol in _fallback_prices:
+                prices[symbol] = _fallback_prices[symbol]
+
+        if not prices:
+            # Lazy warm fallback prices when Redis is unavailable from cold start.
+            for symbol in symbols:
+                _fallback_prices[symbol] = _get_initial_price(symbol)
+            prices.update({symbol: _fallback_prices[symbol] for symbol in symbols})
+
+        return prices
 
     @staticmethod
     def get_symbol_catalog() -> List[Dict[str, str]]:
@@ -177,4 +196,18 @@ class PriceService:
         Returns:
             Current price or None
         """
-        return get_price(symbol)
+        price = get_price(symbol)
+        if price is not None:
+            _fallback_prices[symbol] = price
+            return price
+
+        fallback_price = _fallback_prices.get(symbol)
+        if fallback_price is not None:
+            return fallback_price
+
+        if symbol in DEFAULT_SYMBOLS:
+            fallback_price = _get_initial_price(symbol)
+            _fallback_prices[symbol] = fallback_price
+            return fallback_price
+
+        return None

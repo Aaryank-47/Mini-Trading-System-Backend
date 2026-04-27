@@ -26,6 +26,8 @@ def get_prices():
                 detail="No prices available. Price service may not be running."
             )
         return prices
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -37,14 +39,6 @@ def get_prices():
 def get_symbols():
     """Return the synthetic symbol catalog with short codes and full names."""
     return {"symbols": PriceService.get_symbol_catalog()}
-
-
-@router.get("/symbols")
-def get_symbols():
-    """Get the synthetic market symbol catalog with short codes and full names."""
-    return {
-        "symbols": PriceService.get_symbol_catalog()
-    }
 
 
 @router.get("/price/{symbol}")
