@@ -159,3 +159,8 @@ def downgrade() -> None:
             batch_op.drop_index(batch_op.f('ix_stocks_id'))
             batch_op.drop_index('idx_active_symbol')
         op.drop_table('stocks')
+
+    # Drop Postgres ENUM types
+    if conn.dialect.name == 'postgresql':
+        op.execute("DROP TYPE IF EXISTS orderside CASCADE")
+        op.execute("DROP TYPE IF EXISTS orderstatus CASCADE")
