@@ -216,3 +216,92 @@ class ErrorResponse(BaseModel):
     """Schema for error responses"""
     detail: str
     error_code: Optional[str] = None
+
+
+class StockCreate(BaseModel):
+    """Schema for creating a new stock"""
+    symbol: str = Field(..., min_length=1, max_length=20)
+    company_name: str = Field(..., min_length=1, max_length=255)
+    min_price: float = Field(..., gt=0)
+    max_price: float = Field(..., gt=0)
+    is_active: bool = Field(default=True)
+    
+    @validator('symbol')
+    def validate_symbol(cls, v):
+        v = v.upper()
+        if not v.isalpha():
+            raise ValueError('Symbol must contain only letters')
+        return v
+    
+    @root_validator(skip_on_failure=True)
+    def validate_prices(cls, values):
+        """Validate that min_price is less than max_price"""
+        min_price = values.get('min_price')
+        max_price = values.get('max_price')
+        if min_price and max_price and min_price >= max_price:
+            raise ValueError('min_price must be less than max_price')
+        return values
+
+
+class StockUpdate(BaseModel):
+    """Schema for updating a stock"""
+    company_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    min_price: Optional[float] = Field(None, gt=0)
+    max_price: Optional[float] = Field(None, gt=0)
+    is_active: Optional[bool] = None
+    
+    @root_validator(skip_on_failure=True)
+    def validate_prices(cls, values):
+        """Validate that min_price is less than max_price if both provided"""
+        min_price = values.get('min_price')
+        max_price = values.get('max_price')
+        if min_price and max_price and min_price >= max_price:
+            raise ValueError('min_price must be less than max_price')
+        return values
+
+
+class StockResponse(BaseModel):
+    """Schema for stock response"""
+    id: int
+    symbol: str
+    company_name: str
+    min_price: float
+    max_price: float
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+
+class StockListResponse(BaseModel):
+    """Schema for stock list response"""
+    id: int
+    symbol: str
+    company_name: str
+    is_active: bool
+    
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+
+class StockSymbolResponse(BaseModel):
+    """Schema for active stock symbol"""
+    symbol: str
+    company_name: str
+    is_active: bool
+    
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+
+class ApiResponse(BaseModel):
+    """Generic API response wrapper"""
+    success: bool
+    message: Optional[str] = None
+    data: Optional[dict] = None
+    count: Optional[int] = None

@@ -2,123 +2,93 @@
 from typing import Dict, List, Optional
 import random
 import logging
+from sqlalchemy.orm import Session
 
 from app.utils.redis_manager import get_all_prices, get_price, set_price
+from app.services.stock_service import StockService
 
 logger = logging.getLogger(__name__)
 
-SYMBOL_CATALOG = [
-    {"code": "SBIN", "name": "State Bank of India", "low": 550, "high": 750},
-    {"code": "RELI", "name": "Reliance Industries", "low": 2200, "high": 3200},
-    {"code": "TCS", "name": "Tata Consultancy Services", "low": 3200, "high": 4500},
-    {"code": "INFY", "name": "Infosys", "low": 1300, "high": 2100},
-    {"code": "HDFC", "name": "HDFC Bank", "low": 1400, "high": 1900},
-    {"code": "ICIC", "name": "ICICI Bank", "low": 900, "high": 1300},
-    {"code": "ITC", "name": "ITC Limited", "low": 350, "high": 550},
-    {"code": "LT", "name": "Larsen & Toubro", "low": 3000, "high": 4800},
-    {"code": "AXIS", "name": "Axis Bank", "low": 950, "high": 1400},
-    {"code": "KOTK", "name": "Kotak Mahindra Bank", "low": 1600, "high": 2200},
-    {"code": "BAJF", "name": "Bajaj Finance", "low": 6000, "high": 8000},
-    {"code": "HUNI", "name": "Hindustan Unilever", "low": 2200, "high": 3000},
-    {"code": "ASPA", "name": "Asian Paints", "low": 2800, "high": 3600},
-    {"code": "MRTI", "name": "Maruti Suzuki", "low": 9000, "high": 13000},
-    {"code": "SUNP", "name": "Sun Pharmaceutical Industries", "low": 1400, "high": 1900},
-    {"code": "TITN", "name": "Titan Company", "low": 3000, "high": 4200},
-    {"code": "NEST", "name": "Nestle India", "low": 2200, "high": 2800},
-    {"code": "WIPR", "name": "Wipro", "low": 450, "high": 800},
-    {"code": "TECH", "name": "Tech Mahindra", "low": 1200, "high": 1800},
-    {"code": "ULTR", "name": "UltraTech Cement", "low": 9000, "high": 12000},
-    {"code": "ADEN", "name": "Adani Enterprises", "low": 2500, "high": 3500},
-    {"code": "ADPO", "name": "Adani Ports", "low": 900, "high": 1500},
-    {"code": "PWRG", "name": "Power Grid Corporation", "low": 250, "high": 400},
-    {"code": "NTPC", "name": "NTPC Limited", "low": 300, "high": 450},
-    {"code": "ONGC", "name": "Oil and Natural Gas Corporation", "low": 250, "high": 400},
-    {"code": "COAL", "name": "Coal India", "low": 350, "high": 550},
-    {"code": "TSTE", "name": "Tata Steel", "low": 100, "high": 180},
-    {"code": "BFSV", "name": "Bajaj Finserv", "low": 1500, "high": 2200},
-    {"code": "SBLI", "name": "SBI Life Insurance", "low": 1200, "high": 1800},
-    {"code": "INDB", "name": "IndusInd Bank", "low": 1300, "high": 1800},
-    {"code": "HCLT", "name": "HCL Technologies", "low": 1200, "high": 1900},
-    {"code": "GRAS", "name": "Grasim Industries", "low": 1800, "high": 2800},
-    {"code": "JSWS", "name": "JSW Steel", "low": 700, "high": 1200},
-    {"code": "BPCL", "name": "Bharat Petroleum", "low": 450, "high": 700},
-    {"code": "DRRD", "name": "Dr. Reddy's Laboratories", "low": 4800, "high": 6500},
-    {"code": "DIVI", "name": "Divi's Laboratories", "low": 3000, "high": 4300},
-    {"code": "CIPL", "name": "Cipla", "low": 1200, "high": 1800},
-    {"code": "EICH", "name": "Eicher Motors", "low": 3000, "high": 5000},
-    {"code": "SHRI", "name": "Shriram Finance", "low": 2500, "high": 3800},
-    {"code": "TTMO", "name": "Tata Motors", "low": 800, "high": 1300},
-    {"code": "APOL", "name": "Apollo Hospitals", "low": 5000, "high": 7000},
-    {"code": "MNM", "name": "Mahindra & Mahindra", "low": 2500, "high": 3800},
-    {"code": "BRIT", "name": "Britannia Industries", "low": 4300, "high": 6000},
-    {"code": "HERO", "name": "Hero MotoCorp", "low": 3500, "high": 5500},
-    {"code": "TCON", "name": "Tata Consumer Products", "low": 800, "high": 1200},
-    {"code": "HIND", "name": "Hindalco Industries", "low": 500, "high": 900},
-    {"code": "UPL", "name": "UPL Limited", "low": 450, "high": 750},
-    {"code": "VEDL", "name": "Vedanta", "low": 350, "high": 600},
-    {"code": "BOSC", "name": "Bosch Limited", "low": 25000, "high": 35000},
-    {"code": "LTIM", "name": "LTIMindtree", "low": 4500, "high": 6500},
-    {"code": "PIDI", "name": "Pidilite Industries", "low": 2500, "high": 3500},
-    {"code": "ZOMA", "name": "Zomato", "low": 130, "high": 250},
-    {"code": "DMRT", "name": "Avenue Supermarts", "low": 3300, "high": 4700},
-    {"code": "LICI", "name": "Life Insurance Corporation of India", "low": 800, "high": 1300},
-    {"code": "HAVE", "name": "Havells India", "low": 1300, "high": 2000},
-]
-
-DEFAULT_SYMBOLS = [item["code"] for item in SYMBOL_CATALOG]
-
-_INITIAL_PRICE_RANGES = {
-    item["code"]: (item["low"], item["high"])
-    for item in SYMBOL_CATALOG
-}
-
-_SYMBOL_LOOKUP = {item["code"]: item for item in SYMBOL_CATALOG}
+# Fallback prices cache for when Redis is unavailable
 _fallback_prices: Dict[str, float] = {}
 
 
-def _get_initial_price(symbol: str) -> float:
+def _get_initial_price(symbol: str, min_price: float = 100, max_price: float = 5000) -> float:
     """Generate a synthetic opening price for a symbol."""
-    low, high = _INITIAL_PRICE_RANGES.get(symbol, (100, 5000))
-    return round(random.uniform(low, high), 2)
-
-
-def _get_symbol_name(symbol: str) -> str:
-    """Return the full display name for a market code."""
-    return _SYMBOL_LOOKUP.get(symbol, {}).get("name", symbol)
+    return round(random.uniform(min_price, max_price), 2)
 
 
 class PriceService:
     """Service for managing market prices"""
     
+    # Class-level cache of active symbols and their price ranges
+    _symbols_cache: Dict[str, tuple] = {}  # symbol -> (min_price, max_price)
+    _cache_initialized = False
+    
+    @classmethod
+    def initialize_cache(cls, db: Session) -> None:
+        """Initialize the symbols and price ranges cache from database"""
+        try:
+            cached_stocks = StockService.get_cached_active_stocks()
+            cls._symbols_cache = {
+                symbol: (stock['min_price'], stock['max_price'])
+                for symbol, stock in cached_stocks.items()
+            }
+            cls._cache_initialized = True
+            logger.info(f"✓ Price service cache initialized with {len(cls._symbols_cache)} symbols")
+        except Exception as e:
+            logger.error(f"Failed to initialize price service cache: {e}")
+            raise
+    
+    @classmethod
+    def get_active_symbols(cls) -> List[str]:
+        """Get list of active symbols from cache"""
+        return list(cls._symbols_cache.keys())
+    
     @staticmethod
-    def initialize_prices(symbols: list = None) -> None:
+    def initialize_prices(symbols: list = None, db: Session = None) -> None:
         """
         Initialize prices for symbols
         
         Args:
-            symbols: List of symbols to initialize (uses defaults if None)
+            symbols: List of symbols to initialize (uses active symbols from DB if None)
+            db: Database session (required if symbols is None)
         """
-        symbols = symbols or DEFAULT_SYMBOLS
+        if symbols is None:
+            if db is None:
+                raise ValueError("Database session required when symbols is None")
+            symbols = StockService.get_active_symbols(db)
         
         for symbol in symbols:
-            initial_price = _get_initial_price(symbol)
+            # Get price range for this symbol
+            price_range = PriceService._symbols_cache.get(symbol)
+            if price_range:
+                min_price, max_price = price_range
+            else:
+                min_price, max_price = 100, 5000
+            
+            initial_price = _get_initial_price(symbol, min_price, max_price)
             _fallback_prices[symbol] = initial_price
             set_price(symbol, initial_price)
         
-        logger.info(f"✓ Prices initialized for symbols: {symbols}")
+        logger.info(f"✓ Prices initialized for {len(symbols)} symbols")
     
     @staticmethod
-    def update_prices(symbols: list = None) -> Dict[str, float]:
+    def update_prices(symbols: list = None, db: Session = None) -> Dict[str, float]:
         """
         Update prices with random fluctuation (±2%)
         
         Args:
-            symbols: List of symbols to update (uses defaults if None)
+            symbols: List of symbols to update (uses active symbols from cache if None)
+            db: Database session (unused, for API compatibility)
             
         Returns:
             Dictionary of updated prices
         """
-        symbols = symbols or DEFAULT_SYMBOLS
+        if symbols is None:
+            # Always use cache for symbols - it's already loaded at startup
+            symbols = PriceService.get_active_symbols()
+        
         updated_prices = {}
         
         for symbol in symbols:
@@ -128,7 +98,13 @@ class PriceService:
             
             if current_price is None:
                 # Initialize price if not exists
-                initial_price = _get_initial_price(symbol)
+                price_range = PriceService._symbols_cache.get(symbol)
+                if price_range:
+                    min_price, max_price = price_range
+                else:
+                    min_price, max_price = 100, 5000
+                
+                initial_price = _get_initial_price(symbol, min_price, max_price)
                 _fallback_prices[symbol] = initial_price
                 set_price(symbol, initial_price)
                 updated_prices[symbol] = initial_price
@@ -143,17 +119,21 @@ class PriceService:
         return updated_prices
     
     @staticmethod
-    def get_current_prices(symbols: list = None) -> Dict[str, float]:
+    def get_current_prices(symbols: list = None, db: Session = None) -> Dict[str, float]:
         """
         Get current prices for symbols
         
         Args:
-            symbols: List of symbols to fetch
+            symbols: List of symbols to fetch (uses active symbols from cache if None)
+            db: Database session (unused, for API compatibility)
             
         Returns:
             Dictionary of symbol -> price
         """
-        symbols = symbols or DEFAULT_SYMBOLS
+        if symbols is None:
+            # Always use cache for symbols - it's already loaded at startup
+            symbols = PriceService.get_active_symbols()
+        
         redis_prices = get_all_prices(symbols)
         prices: Dict[str, float] = dict(redis_prices)
 
@@ -162,31 +142,54 @@ class PriceService:
                 prices[symbol] = _fallback_prices[symbol]
 
         if not prices:
-            # Lazy warm fallback prices when Redis is unavailable from cold start.
+            # Lazy warm fallback prices when Redis is unavailable from cold start
             for symbol in symbols:
-                _fallback_prices[symbol] = _get_initial_price(symbol)
+                price_range = PriceService._symbols_cache.get(symbol)
+                if price_range:
+                    min_price, max_price = price_range
+                else:
+                    min_price, max_price = 100, 5000
+                
+                _fallback_prices[symbol] = _get_initial_price(symbol, min_price, max_price)
+            
             prices.update({symbol: _fallback_prices[symbol] for symbol in symbols})
 
         return prices
 
     @staticmethod
-    def get_symbol_catalog() -> List[Dict[str, str]]:
-        """Return the full symbol catalog for the frontend."""
-        return [
-            {
-                "symbol": item["code"],
-                "name": item["name"],
-            }
-            for item in SYMBOL_CATALOG
-        ]
+    def get_symbol_catalog(db: Session = None) -> List[Dict[str, str]]:
+        """
+        Return the full symbol catalog for the frontend (from in-memory cache).
+        Database parameter is optional for backward compatibility.
+        """
+        try:
+            # Use cached stocks for better performance (no database query)
+            cached_stocks = StockService.get_cached_active_stocks()
+            return [
+                {
+                    "symbol": stock['symbol'],
+                    "name": stock['company_name'],
+                }
+                for stock in cached_stocks.values()
+            ]
+        except Exception as e:
+            logger.error(f"Failed to get symbol catalog: {e}")
+            return []
 
     @staticmethod
-    def get_symbol_name(symbol: str) -> str:
+    def get_symbol_name(symbol: str, db: Session) -> str:
         """Return the full display name for a symbol code."""
-        return _get_symbol_name(symbol)
+        try:
+            stock = StockService.get_stock_by_symbol(db, symbol)
+            if stock:
+                return stock.company_name
+            return symbol
+        except Exception as e:
+            logger.error(f"Failed to get symbol name for {symbol}: {e}")
+            return symbol
     
     @staticmethod
-    def get_symbol_price(symbol: str) -> float:
+    def get_symbol_price(symbol: str) -> Optional[float]:
         """
         Get current price for a single symbol
         
@@ -205,8 +208,9 @@ class PriceService:
         if fallback_price is not None:
             return fallback_price
 
-        if symbol in DEFAULT_SYMBOLS:
-            fallback_price = _get_initial_price(symbol)
+        if symbol in PriceService._symbols_cache:
+            min_price, max_price = PriceService._symbols_cache[symbol]
+            fallback_price = _get_initial_price(symbol, min_price, max_price)
             _fallback_prices[symbol] = fallback_price
             return fallback_price
 

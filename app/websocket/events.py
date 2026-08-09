@@ -28,6 +28,10 @@ def normalize_ws_message(message: Any, default_event: str = "message") -> Dict[s
         return message
 
     if isinstance(message, dict):
+        if "event" in message:
+            event_name = message["event"]
+            data = {k: v for k, v in message.items() if k != "event"}
+            return build_ws_message(event_name, data)
         return build_ws_message(default_event, message)
 
     return build_ws_message(default_event, {"value": message})

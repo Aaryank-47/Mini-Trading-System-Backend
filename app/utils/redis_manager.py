@@ -136,18 +136,14 @@ class RedisConnectionManager:
         return connected
     
     def get_client(self) -> Optional[Redis]:
-        """Get Redis client with reconnection attempt if needed"""
-        # If connected, use existing client
+        """Get Redis client instance if connected"""
         if self.is_connected and self.client:
             return self.client
         
-        # If not connected, try to reconnect
         now = time.time()
         if now - self._last_reconnect_log_time >= self._reconnect_log_cooldown:
-            logger.warning("⚠️  Redis client disconnected, attempting to reconnect...")
+            logger.warning("⚠️  Redis client disconnected. Relying on background reconnection...")
             self._last_reconnect_log_time = now
-        if self.reconnect():
-            return self.client
 
         return None
     
@@ -288,26 +284,29 @@ def get_price(symbol: str) -> Optional[float]:
 
 
 def get_all_prices(symbols: list) -> dict:
-    """Get prices for multiple symbols with partial fallback"""
+    """Get prices for multiple symbols using batch Redis operation (MGET)"""
     prices = {}
     try:
         client = get_redis_client()
-        if not client:
-            logger.debug("⚠️  Redis unavailable for bulk price fetch")
+        if not client or not symbols:
+            logger.debug("⚠️  Redis unavailable or no symbols for bulk price fetch")
             return prices
         
-        for symbol in symbols:
-            try:
-                price = get_price(symbol)
-                if price is not None:
-                    prices[symbol] = price
-            except Exception as e:
-                logger.warning(f"⚠️  Error fetching {symbol}: {e}")
-                continue
+        # Use Redis MGET for batch operation - much faster than individual gets
+        keys = [f"price:{symbol.upper()}" for symbol in symbols]
+        values = client.mget(keys)
+        
+        for symbol, value in zip(symbols, values):
+            if value is not None:
+                try:
+                    prices[symbol.upper()] = float(value)
+                except (ValueError, TypeError):
+                    logger.warning(f"⚠️  Invalid price value for {symbol}: {value}")
+                    continue
         
         return prices
     except Exception as e:
-        logger.error(f"❌ Error in bulk price fetch: {e}")
+        logger.error(f"❌ Error in batch price fetch: {e}")
         return prices
 
 

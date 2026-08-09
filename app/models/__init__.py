@@ -112,3 +112,24 @@ class Position(Base):
     
     def __repr__(self):
         return f"<Position(user_id={self.user_id}, symbol={self.symbol}, qty={self.quantity})>"
+
+
+class Stock(Base):
+    """Stock model for storing master stock/symbol data"""
+    __tablename__ = "stocks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String(20), unique=True, nullable=False, index=True)
+    company_name = Column(String(255), nullable=False)
+    min_price = Column(Float, nullable=False)
+    max_price = Column(Float, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    __table_args__ = (
+        Index('idx_active_symbol', 'is_active', 'symbol'),
+    )
+    
+    def __repr__(self):
+        return f"<Stock(symbol={self.symbol}, company_name={self.company_name}, is_active={self.is_active})>"

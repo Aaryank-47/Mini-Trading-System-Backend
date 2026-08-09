@@ -21,7 +21,7 @@ class OrderService:
     @staticmethod
     def execute_order(db: Session, order_data: OrderCreate) -> Order:
         """
-        ✅ FIXED: Execute BUY or SELL order with atomic transaction and row-level locking
+           FIXED: Execute BUY or SELL order with atomic transaction and row-level locking
         
         Args:
             db: Database session
@@ -38,6 +38,7 @@ class OrderService:
         try:
             # Get current price from Redis
             price = get_price(symbol)
+            print(f"Price for symbol {symbol}: {price}")
             if price is None:
                 raise ValueError(f"Price not available for symbol {symbol}")
             

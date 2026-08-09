@@ -190,8 +190,10 @@ class TestConnectionManager:
         message = {"type": "price_update", "symbol": "AAPL", "price": 150.25}
         await manager.broadcast_to_user(user_id, message)
         
-        mock_ws1.send_json.assert_called_once_with(message)
-        mock_ws2.send_json.assert_called_once_with(message)
+        for mock_ws in (mock_ws1, mock_ws2):
+            called_arg = mock_ws.send_json.call_args[0][0]
+            assert called_arg["event"] == "message"
+            assert called_arg["data"] == message
     
     @pytest.mark.asyncio
     async def test_connection_manager_broadcast_to_all(self):
@@ -208,9 +210,10 @@ class TestConnectionManager:
         message = {"type": "system", "text": "Market closed"}
         await manager.broadcast_to_all(message)
         
-        mock_ws1.send_json.assert_called_once_with(message)
-        mock_ws2.send_json.assert_called_once_with(message)
-        mock_ws3.send_json.assert_called_once_with(message)
+        for mock_ws in (mock_ws1, mock_ws2, mock_ws3):
+            called_arg = mock_ws.send_json.call_args[0][0]
+            assert called_arg["event"] == "message"
+            assert called_arg["data"] == message
     
     @pytest.mark.asyncio
     async def test_connection_manager_get_active_users(self):
@@ -277,7 +280,9 @@ class TestConnectionManager:
         await manager.broadcast_to_user(user_id, message)
         
         assert manager.get_connection_count(user_id) == 1
-        mock_ws2.send_json.assert_called_once_with(message)
+        called_arg = mock_ws2.send_json.call_args[0][0]
+        assert called_arg["event"] == "message"
+        assert called_arg["data"] == message
     
     @pytest.mark.asyncio
     async def test_connection_manager_cleanup_empty_user_set(self):
@@ -369,7 +374,9 @@ class TestWebSocketRobustness:
         await manager.broadcast_to_user(user_id, payload)
 
         assert manager.get_connection_count(user_id) == 1
-        healthy_ws.send_json.assert_called_once_with(payload)
+        called_arg = healthy_ws.send_json.call_args[0][0]
+        assert called_arg["event"] == "price_update"
+        assert called_arg["data"] == {"symbol": "SBIN", "price": 500.25}
     
     @pytest.mark.asyncio
     async def test_connection_manager_handles_none_user_id(self):
@@ -445,7 +452,7 @@ class TestWebSocketNoDataHandling:
 
         with patch.object(main_module.PriceService, "update_prices", return_value={}), \
              patch.object(main_module.connection_manager, "broadcast_to_all", new_callable=AsyncMock) as broadcast_mock, \
-             patch("app.main.asyncio.sleep", new=AsyncMock(side_effect=[None, asyncio.CancelledError])):
+             patch("app.core.lifespan.asyncio.sleep", new=AsyncMock(side_effect=[None, asyncio.CancelledError])):
             await main_module.update_prices_background()
 
         broadcast_mock.assert_not_called()
@@ -458,14 +465,14 @@ class TestWebSocketNoDataHandling:
         sample_prices = dict(list(large_market_prices.items())[:20])
         with patch.object(main_module.PriceService, "update_prices", return_value=sample_prices), \
              patch.object(main_module.connection_manager, "broadcast_to_all", new_callable=AsyncMock) as broadcast_mock, \
-             patch("app.main.asyncio.sleep", new=AsyncMock(side_effect=[None, asyncio.CancelledError])):
+             patch("app.core.lifespan.asyncio.sleep", new=AsyncMock(side_effect=[None, asyncio.CancelledError])):
             await main_module.update_prices_background()
 
         assert broadcast_mock.await_count == len(sample_prices)
         first_payload = broadcast_mock.await_args_list[0].args[0]
         assert first_payload["event"] == "price_update"
-        assert "symbol" in first_payload
-        assert "price" in first_payload
+        assert "symbol" in first_payload["data"]
+        assert "price" in first_payload["data"]
         assert "timestamp" in first_payload
 
 

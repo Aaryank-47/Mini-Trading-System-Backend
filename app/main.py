@@ -8,8 +8,16 @@ from app.config import get_settings
 from app.core.lifespan import lifespan
 from app.exceptions.handlers import register_exception_handlers
 from app.middleware.http import register_http_middlewares
-from app.routers import market, orders, portfolio, system, users, ws
+from app.routers import market, orders, portfolio, system, users, ws, stocks
 from app.utils.rate_limiter import limiter
+
+# For test compatibility (legacy imports / patches)
+import asyncio
+from app.routers.ws import websocket_endpoint
+from app.services.user_service import UserService
+from app.services.price_service import PriceService
+from app.websocket import connection_manager
+from app.core.lifespan import update_prices_background
 
 # Configure logging
 logging.basicConfig(
@@ -52,6 +60,7 @@ app.add_middleware(
 app.include_router(users.router)
 app.include_router(orders.router)
 app.include_router(portfolio.router)
+app.include_router(stocks.router)
 app.include_router(market.router)
 app.include_router(system.router)
 app.include_router(ws.router)

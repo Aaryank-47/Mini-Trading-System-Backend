@@ -7,8 +7,9 @@ import logging
 from fastapi import FastAPI
 
 from app.config import get_settings
-from app.database import init_db
+from app.database import init_db, SessionLocal
 from app.services.price_service import PriceService
+from app.services.stock_service import StockService
 from app.utils.redis_manager import close_redis, init_redis
 from app.websocket import PRICE_UPDATES_CHANNEL, connection_manager, publish_realtime_event, start_realtime_bridge, stop_realtime_bridge
 
@@ -24,27 +25,31 @@ async def update_prices_background() -> None:
     while True:
         try:
             await asyncio.sleep(1)
-            updated_prices = PriceService.update_prices()
+            db = SessionLocal()
+            try:
+                updated_prices = PriceService.update_prices(db=db)
 
-            if updated_prices:
-                for symbol, price in updated_prices.items():
-                    payload = {
-                        "symbol": symbol,
-                        "symbol_name": PriceService.get_symbol_name(symbol),
-                        "price": price,
-                    }
-                    published = await asyncio.to_thread(
-                        publish_realtime_event,
-                        PRICE_UPDATES_CHANNEL,
-                        "price_update",
-                        payload,
-                    )
-                    if not published:
-                        await connection_manager.broadcast({
-                            "event": "price_update",
-                            "data": payload,
-                            "timestamp": datetime.now().isoformat(),
-                        })
+                if updated_prices:
+                    for symbol, price in updated_prices.items():
+                        payload = {
+                            "symbol": symbol,
+                            "symbol_name": PriceService.get_symbol_name(symbol, db),
+                            "price": price,
+                        }
+                        published = await asyncio.to_thread(
+                            publish_realtime_event,
+                            PRICE_UPDATES_CHANNEL,
+                            "price_update",
+                            payload,
+                        )
+                        if not published:
+                            await connection_manager.broadcast({
+                                "event": "price_update",
+                                "data": payload,
+                                "timestamp": datetime.now().isoformat(),
+                            })
+            finally:
+                db.close()
         except asyncio.CancelledError:
             logger.info("Price update task cancelled")
             break
@@ -81,9 +86,25 @@ async def lifespan(app: FastAPI):
         logger.warning("Continuing without Redis cache")
 
     try:
+        logger.info("Loading stock master data cache from database")
+        db = SessionLocal()
+        try:
+            StockService._load_cache(db)
+            logger.info("✓ Stock cache loaded successfully")
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.error(f"Failed to load stock cache: {exc}")
+
+    try:
         logger.info("Initializing market prices")
-        PriceService.initialize_prices()
-        logger.info("Market prices initialized")
+        db = SessionLocal()
+        try:
+            PriceService.initialize_cache(db)
+            PriceService.initialize_prices(db=db)
+            logger.info("Market prices initialized")
+        finally:
+            db.close()
     except Exception as exc:
         logger.error(f"Price initialization failed: {exc}")
 
