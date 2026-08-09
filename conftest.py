@@ -63,22 +63,27 @@ def db():
     db = TestingSessionLocal()
     yield db
     db.close()
-    Base.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=engine) 
 
 
 @pytest.fixture(scope="function")
 def client(db):
     """FastAPI test client fixture"""
     app.dependency_overrides[get_db] = override_get_db
-    with patch("app.main.init_db", return_value=None), \
-         patch("app.main.init_redis", return_value=None), \
-         patch("app.main.close_redis", return_value=None), \
-         patch("app.main.PriceService.initialize_prices", return_value=None), \
-         patch("app.main.asyncio.create_task") as create_task_mock:
-        task_mock = AsyncMock()
-        task_mock.cancel = MagicMock()
+    with patch("app.core.lifespan.init_db", return_value=None), \
+         patch("app.core.lifespan.init_redis", return_value=None), \
+         patch("app.core.lifespan.close_redis", return_value=None), \
+         patch("app.core.lifespan.PriceService.initialize_prices", return_value=None), \
+         patch("app.core.lifespan.asyncio.create_task") as create_task_mock:
+        # Create a mock task using a custom class that doesn't require a running event loop at instantiation
+        class MockAwaitableTask:
+            def __await__(self):
+                if False:
+                    yield
+            def cancel(self):
+                pass
+        task_mock = MockAwaitableTask()
         create_task_mock.return_value = task_mock
-
         with TestClient(app) as test_client:
             yield test_client
     app.dependency_overrides.clear()
@@ -181,3 +186,38 @@ def websocket_clients_100():
         ws.send_json = AsyncMock()
         clients.append(ws)
     return clients
+
+
+@pytest.fixture(scope="function", autouse=True)
+def mock_redis_prices():
+    """Globally mock Redis get_price and get_all_prices to avoid running Redis dependencies"""
+    prices = {
+        "SBIN": 820.50,
+        "RELIANCE": 2950.00,
+        "INFY": 1600.00,
+        "TCS": 3800.00,
+        "TATA": 400.00,
+        "ABC": 150.00,
+    }
+
+    def get_price_mock(symbol):
+        return prices.get(symbol.upper(), 100.0)
+
+    def get_all_prices_mock(symbols):
+        return {sym: get_price_mock(sym) for sym in symbols}
+
+    with patch("app.utils.redis_manager.get_price", side_effect=get_price_mock), \
+         patch("app.utils.redis_manager.get_all_prices", side_effect=get_all_prices_mock), \
+         patch("app.services.order_service.get_price", side_effect=get_price_mock), \
+         patch("app.services.price_service.get_price", side_effect=get_price_mock), \
+         patch("app.services.price_service.get_all_prices", side_effect=get_all_prices_mock), \
+         patch("app.routers.portfolio.get_price", side_effect=get_price_mock):
+        yield
+
+
+@pytest.fixture(scope="function", autouse=True)
+def reset_rate_limiter():
+    """Reset the slowapi rate limiter state between tests to avoid carrying over hits"""
+    if hasattr(app.state, "limiter") and hasattr(app.state.limiter, "_storage"):
+        app.state.limiter._storage.reset()
+

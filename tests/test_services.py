@@ -93,8 +93,9 @@ class TestPositionService:
 class TestOrderService:
     """Test order execution logic"""
     
-    def test_execute_buy_order(self, db, test_user):
+    def test_execute_buy_order(self, db, test_user, monkeypatch):
         """Test BUY order execution"""
+        monkeypatch.setattr("app.services.order_service.get_price", lambda symbol: 820.50)
         order_data = OrderCreate(
             user_id=test_user.id,
             symbol="SBIN",
@@ -111,8 +112,9 @@ class TestOrderService:
         db.refresh(test_user.wallet)
         assert test_user.wallet.balance < initial_balance
     
-    def test_execute_sell_order_insufficient_quantity(self, db, test_user):
+    def test_execute_sell_order_insufficient_quantity(self, db, test_user, monkeypatch):
         """Test SELL order fails with insufficient quantity"""
+        monkeypatch.setattr("app.services.order_service.get_price", lambda symbol: 820.50)
         order_data = OrderCreate(
             user_id=test_user.id,
             symbol="SBIN",
@@ -123,15 +125,16 @@ class TestOrderService:
         with pytest.raises(ValueError):
             OrderService.execute_order(db, order_data)
     
-    def test_atomic_transaction_rollback(self, db, test_user):
+    def test_atomic_transaction_rollback(self, db, test_user, monkeypatch):
         """Test transaction rollback on error"""
+        monkeypatch.setattr("app.services.order_service.get_price", lambda symbol: 820.50)
         initial_balance = test_user.wallet.balance
         
         # Try to buy more shares than can afford
         order_data = OrderCreate(
             user_id=test_user.id,
             symbol="SBIN",
-            qty=10000000,  # Extremely large amount
+            qty=900000,  # Large amount within Pydantic bounds but unaffordable
             side="BUY"
         )
         
@@ -151,7 +154,12 @@ class TestUserService:
     def test_create_user_with_wallet(self, db):
         """Test that wallet is created with user"""
         from app.schemas import UserCreate
-        user_data = UserCreate(name="New User", email="newuser@example.com")
+        user_data = UserCreate(
+            name="New User",
+            email="newuser@example.com",
+            password="NewUserPassword123!",
+            confirm_password="NewUserPassword123!"
+        )
         user = UserService.create_user(db, user_data)
         
         assert user.wallet is not None

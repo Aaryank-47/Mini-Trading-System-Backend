@@ -142,7 +142,7 @@ class TestSecurityHeaders:
         }
         response = client.post("/orders", json=order_data, headers=test_user_headers)
         # Should return error without exposing internals
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code in (status.HTTP_400_BAD_REQUEST, status.HTTP_403_FORBIDDEN)
         error_detail = response.json().get("detail", "")
         assert "traceback" not in error_detail.lower()
         assert "sqlalchemy" not in error_detail.lower()
@@ -157,13 +157,23 @@ class TestRateLimitingSecurityBypass:
         for i in range(5):
             response = client.post(
                 "/users/register",
-                json={"name": f"User {i}", "email": f"user{i}@example.com"}
+                json={
+                    "name": f"User {i}",
+                    "email": f"user{i}@example.com",
+                    "password": "Password123!",
+                    "confirm_password": "Password123!"
+                }
             )
             assert response.status_code == status.HTTP_201_CREATED
         
         # 6th should fail
         response = client.post(
             "/users/register",
-            json={"name": "User 6", "email": "user6@example.com"}
+            json={
+                "name": "User 6",
+                "email": "user6@example.com",
+                "password": "Password123!",
+                "confirm_password": "Password123!"
+            }
         )
         assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS

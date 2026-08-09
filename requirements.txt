@@ -14,3 +14,4 @@ aioredis==2.0.1
 websockets==12.0
 slowapi==0.1.9
 psutil==5.9.8
+alembic==1.13.1

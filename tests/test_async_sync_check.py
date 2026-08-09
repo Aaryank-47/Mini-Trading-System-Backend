@@ -108,7 +108,7 @@ class TestAsyncSyncBehavior:
                 "user_id": test_user.id,
                 "symbol": "TCS",
                 "qty": 5,
-                "side": "SELL"
+                "side": "BUY"
             },
             headers=test_user_headers
         )
@@ -122,7 +122,7 @@ class TestAsyncSyncBehavior:
         elapsed = time.time() - start_time
         
         assert response.status_code == status.HTTP_200_OK
-        assert response.json()["id"] == order_id
+        assert response.json()[0]["id"] == order_id
         print(f"✅ Order Fetch (SYNC) - Status: {response.status_code}, Time: {elapsed:.3f}s")
     
     def test_market_data_fetch_sync_behavior(self, client):
@@ -177,33 +177,33 @@ class TestServiceLayerAsyncSync:
         """Verify OrderService methods are SYNCHRONOUS"""
         from app.services.order_service import OrderService
         
-        # Check if create_order is async
-        is_async = inspect.iscoroutinefunction(OrderService.create_order)
-        print(f"✅ OrderService.create_order is {'ASYNC' if is_async else 'SYNC'}")
-        assert not is_async, "OrderService.create_order should be SYNC"
+        # Check if execute_order is async
+        is_async = inspect.iscoroutinefunction(OrderService.execute_order)
+        print(f"✅ OrderService.execute_order is {'ASYNC' if is_async else 'SYNC'}")
+        assert not is_async, "OrderService.execute_order should be SYNC"
         
         # Check if get_order is async
         is_async = inspect.iscoroutinefunction(OrderService.get_order)
         print(f"✅ OrderService.get_order is {'ASYNC' if is_async else 'SYNC'}")
         assert not is_async, "OrderService.get_order should be SYNC"
     
-    def test_price_service_is_async(self):
-        """Verify PriceService methods are ASYNCHRONOUS"""
+    def test_price_service_is_sync(self):
+        """Verify PriceService methods are SYNCHRONOUS"""
         from app.services.price_service import PriceService
         
-        # Check if get_price is async
-        is_async = inspect.iscoroutinefunction(PriceService.get_price)
-        print(f"✅ PriceService.get_price is {'ASYNC' if is_async else 'SYNC'}")
-        # Price service might be async for external API calls
+        # Check if update_prices is async
+        is_async = inspect.iscoroutinefunction(PriceService.update_prices)
+        print(f"✅ PriceService.update_prices is {'ASYNC' if is_async else 'SYNC'}")
+        assert not is_async, "PriceService.update_prices should be SYNC"
     
     def test_wallet_service_is_sync(self, db):
         """Verify WalletService methods are SYNCHRONOUS"""
         from app.services.wallet_service import WalletService
         
-        # Check if create_wallet is async
-        is_async = inspect.iscoroutinefunction(WalletService.create_wallet)
-        print(f"✅ WalletService.create_wallet is {'ASYNC' if is_async else 'SYNC'}")
-        assert not is_async, "WalletService.create_wallet should be SYNC"
+        # Check if get_wallet is async
+        is_async = inspect.iscoroutinefunction(WalletService.get_wallet)
+        print(f"✅ WalletService.get_wallet is {'ASYNC' if is_async else 'SYNC'}")
+        assert not is_async, "WalletService.get_wallet should be SYNC"
 
 
 class TestDatabaseOperations:

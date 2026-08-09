@@ -62,7 +62,7 @@ class TestMarketPriceSystem:
         monkeypatch.setattr(
             main_module.PriceService,
             "update_prices",
-            lambda: {"SBIN": 820.5, "RELIANCE": 2950.0},
+            lambda *args, **kwargs: {"SBIN": 820.5, "RELIANCE": 2950.0},
         )
 
         broadcast_mock = AsyncMock()

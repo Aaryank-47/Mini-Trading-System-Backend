@@ -70,9 +70,12 @@ async def lifespan(app: FastAPI):
     startup_success = True
 
     try:
-        logger.info("Attempting database initialization")
-        init_db()
-        logger.info("Database initialized successfully")
+        if settings.environment == "DEPLOYED":
+            logger.info("Skipping database table creation via metadata in DEPLOYED mode (production schema is managed by Alembic)")
+        else:
+            logger.info("Attempting database initialization")
+            init_db()
+            logger.info("Database initialized successfully")
     except Exception as exc:
         logger.error(f"Database initialization failed: {exc}")
         startup_success = False

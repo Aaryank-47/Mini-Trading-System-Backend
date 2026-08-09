@@ -68,11 +68,12 @@ class OrderCreate(BaseModel):
     user_id: int = Field(..., gt=0)
     symbol: str = Field(..., min_length=1, max_length=10)
     qty: int = Field(..., gt=0, le=1000000)
-    side: str = Field(..., pattern="^(BUY|SELL)$")
+    side: str = Field(..., regex="^(BUY|SELL)$")
     
     @validator('symbol')
     def validate_symbol(cls, v):
-        v = v.upper()
+        if not v.isupper():
+            raise ValueError('Symbol must be uppercase')
         if not v.isalpha():
             raise ValueError('Symbol must contain only letters')
         return v

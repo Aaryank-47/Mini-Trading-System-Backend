@@ -100,15 +100,15 @@ class TestOrderCreation:
             "side": "BUY"
         }
         response = client.post("/orders", json=order_data, headers=test_user_headers)
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_403_FORBIDDEN
     
     def test_create_order_insufficient_balance(self, client, test_user, test_user_headers):
         """Test order creation with insufficient balance"""
-        # Try to buy 1 billion shares (wallet only has 1M initial balance)
+        # Try to buy 10,000 shares of SBIN (costs ~8.2M, exceeding the 1M initial balance)
         order_data = {
             "user_id": test_user.id,
             "symbol": "SBIN",
-            "qty": 1000000000,
+            "qty": 10000,
             "side": "BUY"
         }
         response = client.post("/orders", json=order_data, headers=test_user_headers)

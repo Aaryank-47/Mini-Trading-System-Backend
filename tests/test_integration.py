@@ -15,7 +15,12 @@ class TestCompleteUserJourney:
         # Step 1: Register user
         register_response = client.post(
             "/users/register",
-            json={"name": "Journey User", "email": "journey@example.com"}
+            json={
+                "name": "Journey User",
+                "email": "journey@example.com",
+                "password": "JourneyPassword123!",
+                "confirm_password": "JourneyPassword123!"
+            }
         )
         assert register_response.status_code == status.HTTP_201_CREATED
         
@@ -70,7 +75,12 @@ class TestCompleteUserJourney:
         # Register user
         register_response = client.post(
             "/users/register",
-            json={"name": "Portfolio User", "email": "portfolio@example.com"}
+            json={
+                "name": "Portfolio User",
+                "email": "portfolio@example.com",
+                "password": "PortfolioPassword123!",
+                "confirm_password": "PortfolioPassword123!"
+            }
         )
         user_id = register_response.json()["user_id"]
         token = register_response.json()["access_token"]
@@ -105,7 +115,12 @@ class TestCompleteUserJourney:
         # Register user
         register_response = client.post(
             "/users/register",
-            json={"name": "History User", "email": "history@example.com"}
+            json={
+                "name": "History User",
+                "email": "history@example.com",
+                "password": "HistoryPassword123!",
+                "confirm_password": "HistoryPassword123!"
+            }
         )
         user_id = register_response.json()["user_id"]
         token = register_response.json()["access_token"]
@@ -115,7 +130,7 @@ class TestCompleteUserJourney:
         for i in range(3):
             client.post(
                 "/orders",
-                json={"user_id": user_id, "symbol": f"STOCK{i}", "qty": 10, "side": "BUY"},
+                json={"user_id": user_id, "symbol": "SBIN", "qty": 10, "side": "BUY"},
                 headers=headers
             )
         
@@ -213,5 +228,5 @@ class TestDataConsistency:
         # Get order count endpoint
         count_response = client.get(f"/orders/{test_user.id}/count", headers=test_user_headers)
         if count_response.status_code == status.HTTP_200_OK:
-            reported_count = count_response.json().get("count")
+            reported_count = count_response.json().get("total_orders", count_response.json().get("count"))
             assert reported_count == count_after
