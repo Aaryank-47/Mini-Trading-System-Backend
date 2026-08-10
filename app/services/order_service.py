@@ -67,7 +67,7 @@ class OrderService:
     def _execute_buy_order(db: Session, user_id: int, symbol: str,
                           quantity: int, price: Decimal, total_amount: Decimal) -> Order:
         """
-        ✅ FIXED: Execute BUY order with atomic transaction
+         FIXED: Execute BUY order with atomic transaction
         
         - Uses with_for_update() for row-level locking
         - All operations in single transaction
@@ -80,7 +80,7 @@ class OrderService:
             quantity: Number of shares
             price: Price per share (Decimal)
             total_amount: Total cost (Decimal)
-            
+              
         Returns:
             Executed order object
         """
@@ -93,11 +93,11 @@ class OrderService:
             if not wallet:
                 raise ValueError(f"Wallet not found for user {user_id}")
             
-            if wallet.balance < total_amount:
+            if wallet.balance < total_amount:  # type: ignore
                 raise ValueError("Insufficient balance for this order")
             
             # Deduct from wallet (same transaction)
-            wallet.balance -= total_amount
+            wallet.balance -= total_amount  # type: ignore
             
             # ✅ FIXED: Lock position row to prevent concurrent updates
             position = db.query(Position).filter(
@@ -109,10 +109,10 @@ class OrderService:
             
             if position:
                 # Calculate weighted average price
-                total_cost = (Decimal(position.quantity) * position.average_price) + (Decimal(quantity) * price)
-                total_qty = position.quantity + quantity
-                position.average_price = (total_cost / Decimal(total_qty)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                position.quantity = total_qty
+                total_cost = (Decimal(position.quantity) * position.average_price) + (Decimal(quantity) * price)  # type: ignore
+                total_qty = position.quantity + quantity  # type: ignore
+                position.average_price = (total_cost / Decimal(total_qty)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)  # type: ignore
+                position.quantity = total_qty  # type: ignore
             else:
                 # Create new position
                 position = Position(
@@ -177,13 +177,13 @@ class OrderService:
                 )
             ).with_for_update().first()
             
-            if not position or position.quantity < quantity:
+            if not position or position.quantity < quantity:  # type: ignore
                 raise ValueError(f"Insufficient quantity to sell for {symbol}")
             
             # Reduce position
-            position.quantity -= quantity
+            position.quantity -= quantity  # type: ignore
             
-            if position.quantity == 0:
+            if position.quantity == 0:  # type: ignore
                 # Delete position if quantity becomes 0
                 db.delete(position)
             
@@ -196,7 +196,7 @@ class OrderService:
                 raise ValueError(f"Wallet not found for user {user_id}")
             
             # Add to wallet
-            wallet.balance += total_amount
+            wallet.balance += total_amount  # type: ignore
             
             # Create order record
             order = Order(
@@ -270,10 +270,10 @@ class OrderService:
         if not order:
             return False
         
-        if order.status == OrderStatus.COMPLETED:
+        if order.status == OrderStatus.COMPLETED:  # type: ignore
             return False
         
-        order.status = OrderStatus.CANCELLED
+        order.status = OrderStatus.CANCELLED  # type: ignore
         db.commit()
         logger.info(f"✓ Order cancelled: {order_id}")
         return True

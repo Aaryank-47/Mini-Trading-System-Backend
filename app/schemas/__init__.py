@@ -5,6 +5,11 @@ from pydantic import BaseModel, EmailStr, Field, validator, root_validator
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
+class ORMBase(BaseModel):
+    """Base model for ORM schema conversions"""
+    class Config: # type: ignore
+        orm_mode = True
+        from_attributes = True
 
 
 class UserCreate(BaseModel):
@@ -37,30 +42,22 @@ class UserCreate(BaseModel):
         return values
 
 
-class UserResponse(BaseModel):
+class UserResponse(ORMBase):
     """Schema for user response"""
     id: int
     name: str
     email: str
     created_at: datetime
     updated_at: datetime
-    
-    class Config:
-        orm_mode = True
-        from_attributes = True
 
 
-class WalletResponse(BaseModel):
+class WalletResponse(ORMBase):
     """Schema for wallet response"""
     id: int
     user_id: int
     balance: Decimal
     created_at: datetime
     updated_at: datetime
-    
-    class Config:
-        orm_mode = True
-        from_attributes = True
 
 
 class OrderCreate(BaseModel):
@@ -79,7 +76,7 @@ class OrderCreate(BaseModel):
         return v
 
 
-class OrderResponse(BaseModel):
+class OrderResponse(ORMBase):
     """Schema for order response"""
     id: int
     user_id: int
@@ -91,13 +88,9 @@ class OrderResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
-    
-    class Config:
-        orm_mode = True
-        from_attributes = True
 
 
-class OrderHistoryResponse(BaseModel):
+class OrderHistoryResponse(ORMBase):
     """Schema for order history"""
     id: int
     symbol: str
@@ -107,13 +100,9 @@ class OrderHistoryResponse(BaseModel):
     side: str
     status: str
     created_at: datetime
-    
-    class Config:
-        orm_mode = True
-        from_attributes = True
 
 
-class PositionResponse(BaseModel):
+class PositionResponse(ORMBase):
     """Schema for position response"""
     id: int
     user_id: int
@@ -122,10 +111,6 @@ class PositionResponse(BaseModel):
     average_price: Decimal
     created_at: datetime
     updated_at: datetime
-    
-    class Config:
-        orm_mode = True
-        from_attributes = True
 
 
 class PortfolioItem(BaseModel):
@@ -261,7 +246,7 @@ class StockUpdate(BaseModel):
         return values
 
 
-class StockResponse(BaseModel):
+class StockResponse(ORMBase):
     """Schema for stock response"""
     id: int
     symbol: str
@@ -271,33 +256,21 @@ class StockResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    
-    class Config:
-        orm_mode = True
-        from_attributes = True
 
 
-class StockListResponse(BaseModel):
+class StockListResponse(ORMBase):
     """Schema for stock list response"""
     id: int
     symbol: str
     company_name: str
     is_active: bool
-    
-    class Config:
-        orm_mode = True
-        from_attributes = True
 
 
-class StockSymbolResponse(BaseModel):
+class StockSymbolResponse(ORMBase):
     """Schema for active stock symbol"""
     symbol: str
     company_name: str
     is_active: bool
-    
-    class Config:
-        orm_mode = True
-        from_attributes = True
 
 
 class ApiResponse(BaseModel):
