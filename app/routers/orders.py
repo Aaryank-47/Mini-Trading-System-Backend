@@ -62,18 +62,27 @@ async def create_order(
                 detail=f"User {order_data.user_id} not found"
             )
         
-        order = await run_in_threadpool(OrderService.execute_order, db, order_data)
-        if not order:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Order failed"
-            )
-
-        try:
-            # Send real-time order event from the active app event loop.
-            await _send_order_notification(order_data.user_id, order)
-        except Exception as ws_error:
-            logger.warning(f"Failed to send WebSocket notification: {ws_error}")
+        if order_data.order_type == "MARKET":
+            order = await run_in_threadpool(OrderService.execute_order, db, order_data)
+            if not order:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Order failed"
+                )
+            
+            try:
+                # Send real-time order event from the active app event loop.
+                await _send_order_notification(order_data.user_id, order, event="order_executed")
+            except Exception as ws_error:
+                logger.warning(f"Failed to send WebSocket notification: {ws_error}")
+        else:
+            order = await run_in_threadpool(OrderService.create_pending_order, db, order_data)
+            
+            try:
+                # Send real-time order event
+                await _send_order_notification(order_data.user_id, order, event="order_created")
+            except Exception as ws_error:
+                logger.warning(f"Failed to send WebSocket notification: {ws_error}")
 
         response = OrderResponse.from_orm(order)
         logger.info(f"Returning order response: {response.id}")
@@ -145,22 +154,81 @@ def get_order_count(
         "total_orders": len(orders)
     }
 
+@router.delete("/{order_id}", status_code=status.HTTP_200_OK)
+def cancel_order(
+    order_id: int,
+    current_user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    ✅ FIXED: Cancel a pending order
+    """
+    order = OrderService.get_order(db, order_id)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found"
+        )
+        
+    verify_user_ownership(order.user_id, current_user_id)
+    
+    if order.status != "PENDING":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only pending orders can be cancelled"
+        )
+        
+    success = OrderService.cancel_order(db, order_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to cancel order"
+        )
+        
+    return {"success": True, "message": "Order cancelled successfully"}
 
-async def _send_order_notification(user_id: int, order):
-    """Send order execution notification via WebSocket"""
+
+@router.get("/{user_id}/pending", response_model=List[OrderHistoryResponse])
+def get_pending_orders(
+    user_id: int,
+    current_user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all pending orders for a user.
+    """
+    verify_user_ownership(user_id, current_user_id)
+    from app.models import Order, OrderStatus
+    
+    orders = db.query(Order).filter(
+        Order.user_id == user_id,
+        Order.status == OrderStatus.PENDING
+    ).order_by(Order.created_at.desc()).all()
+    
+    return orders
+
+
+async def _send_order_notification(user_id: int, order, event: str = "order_executed"):
+    """Send order execution/creation notification via WebSocket"""
     message = {
-        "event": "order_executed",
-        "id": order.id,
-        "user_id": user_id,
-        "symbol": order.symbol,
-        "symbol_name": PriceService.get_symbol_name(order.symbol),
-        "quantity": order.quantity,
-        "qty": order.quantity,
-        "price": float(order.price),
-        "side": order.side.value,
-        "status": order.status.value,
-        "total_amount": float(order.total_amount),
-        "created_at": order.created_at.isoformat(),
-        "timestamp": order.created_at.isoformat(),
+        "event": event,
+        "data": {
+            "id": order.id,
+            "order_id": order.id,
+            "user_id": user_id,
+            "symbol": order.symbol,
+            "symbol_name": PriceService.get_symbol_name(order.symbol, None),
+            "quantity": order.quantity,
+            "qty": order.quantity,
+            "price": float(order.price) if order.price else None,
+            "side": order.side.value if hasattr(order.side, 'value') else order.side,
+            "order_type": order.order_type.value if hasattr(order.order_type, 'value') else order.order_type,
+            "status": order.status.value if hasattr(order.status, 'value') else order.status,
+            "total_amount": float(order.total_amount) if order.total_amount else None,
+            "limit_price": float(order.limit_price) if order.limit_price else None,
+            "stop_price": float(order.stop_price) if order.stop_price else None,
+            "created_at": order.created_at.isoformat(),
+            "timestamp": order.created_at.isoformat(),
+        }
     }
     await connection_manager.broadcast_to_user(user_id, message)

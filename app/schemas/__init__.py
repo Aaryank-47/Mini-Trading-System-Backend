@@ -66,6 +66,9 @@ class OrderCreate(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=10)
     qty: int = Field(..., gt=0, le=1000000)
     side: str = Field(..., regex="^(BUY|SELL)$")
+    order_type: str = Field(default="MARKET", regex="^(MARKET|LIMIT|STOP_LOSS)$")
+    limit_price: Optional[Decimal] = Field(None, gt=Decimal('0'))  # type: ignore
+    stop_price: Optional[Decimal] = Field(None, gt=Decimal('0'))  # type: ignore
     
     @validator('symbol')
     def validate_symbol(cls, v):
@@ -75,6 +78,28 @@ class OrderCreate(BaseModel):
             raise ValueError('Symbol must contain only letters')
         return v
 
+    @root_validator(skip_on_failure=True)
+    def validate_order_type_prices(cls, values):
+        order_type = values.get('order_type')
+        limit_price = values.get('limit_price')
+        stop_price = values.get('stop_price')
+        
+        if order_type == 'MARKET':
+            if limit_price is not None or stop_price is not None:
+                raise ValueError("MARKET orders cannot have limit_price or stop_price")
+        elif order_type == 'LIMIT':
+            if limit_price is None:
+                raise ValueError("LIMIT orders must have a limit_price")
+            if stop_price is not None:
+                raise ValueError("LIMIT orders cannot have a stop_price")
+        elif order_type == 'STOP_LOSS':
+            if stop_price is None:
+                raise ValueError("STOP_LOSS orders must have a stop_price")
+            if limit_price is not None:
+                raise ValueError("STOP_LOSS orders cannot have a limit_price")
+        
+        return values
+
 
 class OrderResponse(ORMBase):
     """Schema for order response"""
@@ -82,10 +107,15 @@ class OrderResponse(ORMBase):
     user_id: int
     symbol: str
     quantity: int
-    price: Decimal
-    total_amount: Decimal
+    order_type: str
+    limit_price: Optional[Decimal] = None
+    stop_price: Optional[Decimal] = None
+    price: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None
     side: str
     status: str
+    triggered_at: Optional[datetime] = None
+    executed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -95,10 +125,15 @@ class OrderHistoryResponse(ORMBase):
     id: int
     symbol: str
     quantity: int
-    price: Decimal
-    total_amount: Decimal
+    order_type: str
+    limit_price: Optional[Decimal] = None
+    stop_price: Optional[Decimal] = None
+    price: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None
     side: str
     status: str
+    triggered_at: Optional[datetime] = None
+    executed_at: Optional[datetime] = None
     created_at: datetime
 
 

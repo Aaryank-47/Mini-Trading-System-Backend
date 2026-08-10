@@ -73,6 +73,7 @@ def client(db):
     with patch("app.core.lifespan.init_db", return_value=None), \
          patch("app.core.lifespan.init_redis", return_value=None), \
          patch("app.core.lifespan.close_redis", return_value=None), \
+         patch("app.core.lifespan.publish_realtime_event", return_value=False), \
          patch("app.core.lifespan.PriceService.initialize_prices", return_value=None), \
          patch("app.core.lifespan.asyncio.create_task") as create_task_mock:
         # Create a mock task using a custom class that doesn't require a running event loop at instantiation
@@ -203,7 +204,9 @@ def mock_redis_prices():
     def get_price_mock(symbol):
         return prices.get(symbol.upper(), 100.0)
 
-    def get_all_prices_mock(symbols):
+    def get_all_prices_mock(symbols=None):
+        if not symbols:
+            return prices
         return {sym: get_price_mock(sym) for sym in symbols}
 
     with patch("app.utils.redis_manager.get_price", side_effect=get_price_mock), \
@@ -211,6 +214,7 @@ def mock_redis_prices():
          patch("app.services.order_service.get_price", side_effect=get_price_mock), \
          patch("app.services.price_service.get_price", side_effect=get_price_mock), \
          patch("app.services.price_service.get_all_prices", side_effect=get_all_prices_mock), \
+         patch("app.core.lifespan.publish_realtime_event", return_value=False), \
          patch("app.routers.portfolio.get_price", side_effect=get_price_mock):
         yield
 

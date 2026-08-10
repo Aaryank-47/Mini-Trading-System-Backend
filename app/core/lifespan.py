@@ -30,7 +30,15 @@ async def update_prices_background() -> None:
                 updated_prices = PriceService.update_prices(db=db)
 
                 if updated_prices:
+                    from app.services.trading_engine import TradingEngine
+                    
                     for symbol, price in updated_prices.items():
+                        # Evaluate pending orders against new price
+                        try:
+                            TradingEngine.evaluate_pending_orders(db, symbol, price)
+                        except Exception as e:
+                            logger.error(f"Trading Engine evaluation failed for {symbol}: {e}")
+                            
                         payload = {
                             "symbol": symbol,
                             "symbol_name": PriceService.get_symbol_name(symbol, db),
@@ -43,7 +51,7 @@ async def update_prices_background() -> None:
                             payload,
                         )
                         if not published:
-                            await connection_manager.broadcast({
+                            await connection_manager.broadcast_to_all({
                                 "event": "price_update",
                                 "data": payload,
                                 "timestamp": datetime.now().isoformat(),

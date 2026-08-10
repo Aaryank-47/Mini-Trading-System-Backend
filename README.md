@@ -7,9 +7,10 @@ A FastAPI backend for a mini trading platform with JWT authentication, Redis-bac
 - User registration and login with access and refresh tokens
 - Authenticated portfolio, order, and profile endpoints
 - Redis-backed market prices updated every second
-- Instant BUY and SELL execution with atomic wallet and position updates
+- Trading Execution Engine for conditional LIMIT and STOP-LOSS orders
+- Instant MARKET order execution with atomic wallet and position updates
 - Weighted average position pricing
-- Real-time WebSocket notifications for price updates and executed orders
+- Real-time WebSocket notifications for price updates, created orders, and executed orders
 
 ## Tech Stack
 
@@ -271,21 +272,26 @@ Request:
   "user_id": 1,
   "symbol": "SBIN",
   "qty": 10,
-  "side": "BUY"
+  "side": "BUY",
+  "order_type": "LIMIT",
+  "limit_price": 600.00
 }
 ```
 
 Notes:
 
 - `side` must be `BUY` or `SELL`
-- Orders execute immediately with status `COMPLETED`
-- BUY orders deduct wallet balance and update positions
-- SELL orders validate quantity, reduce positions, and credit the wallet
+- `order_type` can be `MARKET`, `LIMIT`, or `STOP_LOSS` (defaults to `MARKET`)
+- MARKET orders execute immediately with status `COMPLETED`
+- LIMIT and STOP_LOSS orders remain `PENDING` until their target price is reached, evaluated constantly by the background Trading Engine.
+- Pending orders can be cancelled using the `DELETE /orders/{order_id}` endpoint.
 
-#### Order History
+#### Order Management
 
-- `GET /orders/{user_id}`
+- `GET /orders/{user_id}` (Order History)
 - `GET /orders/{user_id}/count`
+- `GET /orders/{user_id}/pending` (List Pending Orders)
+- `DELETE /orders/{order_id}` (Cancel Pending Order)
 
 ### Portfolio
 

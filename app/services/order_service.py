@@ -62,10 +62,71 @@ class OrderService:
             db.rollback()
             logger.error(f"Order execution failed for user {user_id}: {e}")
             raise
+
+    @staticmethod
+    def create_pending_order(db: Session, order_data: OrderCreate) -> Order:
+        """Create a new pending conditional order without executing it."""
+        from app.models import OrderType
+        order = Order(
+            user_id=order_data.user_id,
+            symbol=order_data.symbol.upper(),
+            quantity=order_data.qty,
+            order_type=OrderType(order_data.order_type),
+            limit_price=order_data.limit_price,
+            stop_price=order_data.stop_price,
+            side=OrderSide(order_data.side.upper()),
+            status=OrderStatus.PENDING
+        )
+        db.add(order)
+        db.commit()
+        db.refresh(order)
+        logger.info(f"✓ Created PENDING {order.order_type.value} order {order.id} for {order.symbol}")
+        return order
+
+    @staticmethod
+    def execute_pending_order(db: Session, order_id: int, execution_price: Decimal) -> Order:
+        """Idempotently execute a pending order at the given execution price."""
+        try:
+            # 1. Lock the order row to prevent duplicate execution
+            order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
+            if not order:
+                db.rollback()
+                raise ValueError(f"Order {order_id} not found")
+            
+            # 2. Idempotency check: Ensure it's still PENDING
+            if order.status != OrderStatus.PENDING:
+                logger.info(f"Order {order_id} already processed (status: {order.status})")
+                db.rollback()
+                return order
+            
+            # 3. Execute
+            total_amount = Decimal(order.quantity) * execution_price
+            
+            if order.side == OrderSide.BUY:
+                executed_order = OrderService._execute_buy_order(
+                    db, order.user_id, order.symbol, order.quantity, execution_price, total_amount, existing_order=order
+                )
+            else:
+                executed_order = OrderService._execute_sell_order(
+                    db, order.user_id, order.symbol, order.quantity, execution_price, total_amount, existing_order=order
+                )
+                
+            # WebSocket notification logic is decoupled and handled by the caller or a separate pub/sub mechanism
+            return executed_order
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to execute pending order {order_id}: {e}")
+            
+            # Optional: Mark as FAILED if it was a persistent error, but for now we just rollback
+            # order.status = OrderStatus.FAILED
+            # db.commit()
+            
+            raise
     
     @staticmethod
     def _execute_buy_order(db: Session, user_id: int, symbol: str,
-                          quantity: int, price: Decimal, total_amount: Decimal) -> Order:
+                          quantity: int, price: Decimal, total_amount: Decimal, existing_order: Order = None) -> Order:
         """
          FIXED: Execute BUY order with atomic transaction
         
@@ -93,11 +154,11 @@ class OrderService:
             if not wallet:
                 raise ValueError(f"Wallet not found for user {user_id}")
             
-            if wallet.balance < total_amount:  # type: ignore
+            if wallet.balance < total_amount:
                 raise ValueError("Insufficient balance for this order")
             
             # Deduct from wallet (same transaction)
-            wallet.balance -= total_amount  # type: ignore
+            wallet.balance -= total_amount
             
             # ✅ FIXED: Lock position row to prevent concurrent updates
             position = db.query(Position).filter(
@@ -110,7 +171,7 @@ class OrderService:
             if position:
                 # Calculate weighted average price
                 total_cost = (Decimal(position.quantity) * position.average_price) + (Decimal(quantity) * price)  # type: ignore
-                total_qty = position.quantity + quantity  # type: ignore
+                total_qty = position.quantity + quantity
                 position.average_price = (total_cost / Decimal(total_qty)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)  # type: ignore
                 position.quantity = total_qty  # type: ignore
             else:
@@ -123,17 +184,27 @@ class OrderService:
                 )
                 db.add(position)
             
-            # Create order record
-            order = Order(
-                user_id=user_id,
-                symbol=symbol,
-                quantity=quantity,
-                price=price,
-                total_amount=total_amount,
-                side=OrderSide.BUY,
-                status=OrderStatus.COMPLETED
-            )
-            db.add(order)
+            # Update or create order record
+            from app.models import OrderType
+            if existing_order:
+                existing_order.price = price
+                existing_order.total_amount = total_amount
+                existing_order.status = OrderStatus.COMPLETED
+                existing_order.executed_at = datetime.utcnow()
+                order = existing_order
+            else:
+                order = Order(
+                    user_id=user_id,
+                    symbol=symbol,
+                    quantity=quantity,
+                    price=price,
+                    total_amount=total_amount,
+                    order_type=OrderType.MARKET,
+                    side=OrderSide.BUY,
+                    status=OrderStatus.COMPLETED,
+                    executed_at=datetime.utcnow()
+                )
+                db.add(order)
             
             # ✅ FIXED: Single atomic commit - all or nothing
             db.commit()
@@ -149,7 +220,7 @@ class OrderService:
     
     @staticmethod
     def _execute_sell_order(db: Session, user_id: int, symbol: str,
-                           quantity: int, price: Decimal, total_amount: Decimal) -> Order:
+                           quantity: int, price: Decimal, total_amount: Decimal, existing_order: Order = None) -> Order:
         """
         ✅ FIXED: Execute SELL order with atomic transaction
         
@@ -177,13 +248,13 @@ class OrderService:
                 )
             ).with_for_update().first()
             
-            if not position or position.quantity < quantity:  # type: ignore
+            if not position or position.quantity < quantity:
                 raise ValueError(f"Insufficient quantity to sell for {symbol}")
             
             # Reduce position
-            position.quantity -= quantity  # type: ignore
+            position.quantity -= quantity
             
-            if position.quantity == 0:  # type: ignore
+            if position.quantity == 0:
                 # Delete position if quantity becomes 0
                 db.delete(position)
             
@@ -196,19 +267,29 @@ class OrderService:
                 raise ValueError(f"Wallet not found for user {user_id}")
             
             # Add to wallet
-            wallet.balance += total_amount  # type: ignore
+            wallet.balance += total_amount
             
-            # Create order record
-            order = Order(
-                user_id=user_id,
-                symbol=symbol,
-                quantity=quantity,
-                price=price,
-                total_amount=total_amount,
-                side=OrderSide.SELL,
-                status=OrderStatus.COMPLETED
-            )
-            db.add(order)
+            # Update or create order record
+            from app.models import OrderType
+            if existing_order:
+                existing_order.price = price
+                existing_order.total_amount = total_amount
+                existing_order.status = OrderStatus.COMPLETED
+                existing_order.executed_at = datetime.utcnow()
+                order = existing_order
+            else:
+                order = Order(
+                    user_id=user_id,
+                    symbol=symbol,
+                    quantity=quantity,
+                    price=price,
+                    total_amount=total_amount,
+                    order_type=OrderType.MARKET,
+                    side=OrderSide.SELL,
+                    status=OrderStatus.COMPLETED,
+                    executed_at=datetime.utcnow()
+                )
+                db.add(order)
             
             # ✅ FIXED: Single atomic commit - all or nothing
             db.commit()
@@ -270,10 +351,10 @@ class OrderService:
         if not order:
             return False
         
-        if order.status == OrderStatus.COMPLETED:  # type: ignore
+        if order.status == OrderStatus.COMPLETED:
             return False
         
-        order.status = OrderStatus.CANCELLED  # type: ignore
+        order.status = OrderStatus.CANCELLED
         db.commit()
         logger.info(f"✓ Order cancelled: {order_id}")
         return True
