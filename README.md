@@ -45,7 +45,82 @@ Ts-backend/
 └── requirements-test.txt
 ```
 
-## Setup
+## Docker Development Setup
+
+The backend infrastructure has been containerized to ensure environment consistency, service isolation, and reproducible development across different machines.
+
+### Architecture
+
+We use Docker Compose to orchestrate three containers:
+1. **api**: The FastAPI application.
+2. **postgres**: A PostgreSQL 15 database.
+3. **redis**: A Redis 7 cache.
+
+#### Internal Networking
+- The containers communicate via an internal Docker bridge network (`trading-network`).
+- FastAPI connects to PostgreSQL via the hostname `postgres` on port `5432`.
+- FastAPI connects to Redis via the hostname `redis` on port `6379`.
+- Do not use `localhost` for container-to-container communication.
+
+#### PostgreSQL Persistence
+- We use a named Docker volume (`postgres_data`) for PostgreSQL persistence.
+- This ensures your data survives container restarts and `docker compose down`.
+- Note: Running `docker compose down -v` WILL DESTROY your local database data.
+
+#### Alembic Integration
+- Database schema is automatically managed by Alembic. 
+- On startup, the API container waits for PostgreSQL to become healthy, runs `alembic upgrade head`, and then starts Uvicorn.
+
+### Running with Docker
+
+1. Create your `.env` file from `.env.example`:
+```bash
+cp .env.example .env
+```
+Ensure `DB_URL` points to `postgresql://trading_user:trading_pass@postgres:5432/trading_db` and `REDIS_URL` points to `redis://redis:6379`.
+
+2. Start the environment:
+```bash
+docker compose up --build
+```
+This will pull the required images, build the API container, run migrations, and start the application.
+
+3. Stop the environment:
+```bash
+docker compose down
+```
+
+4. Force Rebuild (e.g. after adding new dependencies):
+```bash
+docker compose build --no-cache
+```
+
+5. View logs:
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f api
+docker compose logs -f postgres
+docker compose logs -f redis
+```
+
+6. Run Tests inside Docker:
+```bash
+docker compose exec api pytest
+```
+
+### Complete Environment Reset
+
+> ⚠️ **WARNING**: This will permanently delete your local database!
+
+If you need a completely fresh start:
+```bash
+docker compose down -v
+```
+
+## Local Setup (Without Docker)
 
 ### Prerequisites
 
