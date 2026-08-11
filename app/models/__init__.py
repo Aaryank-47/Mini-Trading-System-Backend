@@ -10,6 +10,7 @@ import enum
 from typing import Optional, List
 from app.database import Base
 from decimal import Decimal
+from app.models.audit import AuditLog, AuditEventType, AuditEntityType
 
 
 class User(Base):

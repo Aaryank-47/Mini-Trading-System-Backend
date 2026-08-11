@@ -8,7 +8,7 @@ from app.config import get_settings
 from app.core.lifespan import lifespan
 from app.exceptions.handlers import register_exception_handlers
 from app.middleware.http import register_http_middlewares
-from app.routers import market, orders, portfolio, system, users, ws, stocks
+from app.routers import market, orders, portfolio, system, users, ws, stocks, audit
 from app.utils.rate_limiter import limiter
 
 # For test compatibility (legacy imports / patches)
@@ -64,6 +64,7 @@ app.include_router(stocks.router)
 app.include_router(market.router)
 app.include_router(system.router)
 app.include_router(ws.router)
+app.include_router(audit.router)
 
 register_http_middlewares(app)
 register_exception_handlers(app)

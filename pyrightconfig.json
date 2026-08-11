@@ -3,5 +3,6 @@
   "venv": ".venv311",
   "extraPaths": [
     "."
-  ]
+  ],
+  "reportIncompatibleVariableOverride": false
 }

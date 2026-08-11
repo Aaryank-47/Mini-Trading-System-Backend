@@ -10,7 +10,10 @@ from app.services.position_service import PositionService
 from app.utils.redis_manager import get_price
 import logging
 from datetime import datetime
+from app.services.audit_service import AuditService
+from app.models.audit import AuditEventType, AuditEntityType
 from decimal import Decimal, ROUND_HALF_UP
+from typing import cast
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +64,19 @@ class OrderService:
             # ✅ FIXED: Rollback on any error
             db.rollback()
             logger.error(f"Order execution failed for user {user_id}: {e}")
+            
+            # Log failed order attempt
+            AuditService.log(
+                db=db,
+                event_type=AuditEventType.ORDER_FAILED,
+                entity_type=AuditEntityType.ORDER,
+                entity_id=None,
+                user_id=user_id,
+                status="FAILED",
+                metadata_info={"symbol": symbol, "quantity": quantity, "side": side, "reason": str(e)},
+                commit=True
+            )
+            
             raise
 
     @staticmethod
@@ -78,6 +94,27 @@ class OrderService:
             status=OrderStatus.PENDING
         )
         db.add(order)
+        db.flush()
+        
+        event_type = AuditEventType.LIMIT_ORDER_CREATED if order.order_type == OrderType.LIMIT else AuditEventType.STOP_LOSS_CREATED
+        
+        AuditService.log(
+            db=db,
+            event_type=event_type,
+            entity_type=AuditEntityType.ORDER,
+            entity_id=cast(int, order.id),
+            user_id=cast(int, order.user_id),
+            status="SUCCESS",
+            metadata_info={
+                "symbol": order.symbol, 
+                "quantity": order.quantity, 
+                "side": order.side.value,
+                "limit_price": float(cast(Decimal, order.limit_price)) if order.limit_price else None,
+                "stop_price": float(cast(Decimal, order.stop_price)) if order.stop_price else None
+            },
+            commit=False
+        )
+        
         db.commit()
         db.refresh(order)
         logger.info(f"✓ Created PENDING {order.order_type.value} order {order.id} for {order.symbol}")
@@ -160,6 +197,17 @@ class OrderService:
             # Deduct from wallet (same transaction)
             wallet.balance -= total_amount
             
+            AuditService.log(
+                db=db,
+                event_type=AuditEventType.WALLET_DEBITED,
+                entity_type=AuditEntityType.WALLET,
+                entity_id=cast(int, wallet.id),
+                user_id=user_id,
+                status="SUCCESS",
+                metadata_info={"amount": float(total_amount), "reason": f"Buy order for {symbol}"},
+                commit=False
+            )
+            
             # ✅ FIXED: Lock position row to prevent concurrent updates
             position = db.query(Position).filter(
                 and_(
@@ -172,8 +220,23 @@ class OrderService:
                 # Calculate weighted average price
                 total_cost = (Decimal(position.quantity) * position.average_price) + (Decimal(quantity) * price)  # type: ignore
                 total_qty = position.quantity + quantity
+                
+                prev_state = {"quantity": position.quantity, "average_price": float(cast(Decimal, position.average_price))}
+                
                 position.average_price = (total_cost / Decimal(total_qty)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)  # type: ignore
                 position.quantity = total_qty  # type: ignore
+                
+                AuditService.log(
+                    db=db,
+                    event_type=AuditEventType.POSITION_UPDATED,
+                    entity_type=AuditEntityType.POSITION,
+                    entity_id=cast(int, position.id),
+                    user_id=user_id,
+                    status="SUCCESS",
+                    previous_state=prev_state,
+                    new_state={"quantity": position.quantity, "average_price": float(cast(Decimal, position.average_price))},
+                    commit=False
+                )
             else:
                 # Create new position
                 position = Position(
@@ -183,6 +246,18 @@ class OrderService:
                     average_price=price
                 )
                 db.add(position)
+                db.flush()
+                
+                AuditService.log(
+                    db=db,
+                    event_type=AuditEventType.POSITION_CREATED,
+                    entity_type=AuditEntityType.POSITION,
+                    entity_id=cast(int, position.id),
+                    user_id=user_id,
+                    status="SUCCESS",
+                    new_state={"quantity": position.quantity, "average_price": float(cast(Decimal, position.average_price))},
+                    commit=False
+                )
             
             # Update or create order record
             from app.models import OrderType
@@ -205,6 +280,45 @@ class OrderService:
                     executed_at=datetime.utcnow()
                 )
                 db.add(order)
+            
+            db.flush()
+            
+            from app.models import OrderType
+            event_type = AuditEventType.ORDER_EXECUTED
+            if order.order_type == OrderType.LIMIT:
+                event_type = AuditEventType.LIMIT_ORDER_EXECUTED
+            elif order.order_type == OrderType.STOP_LOSS:
+                event_type = AuditEventType.STOP_LOSS_EXECUTED
+            
+            if not existing_order:
+                # Log creation for market orders explicitly in the same transaction
+                AuditService.log(
+                    db=db,
+                    event_type=AuditEventType.ORDER_CREATED,
+                    entity_type=AuditEntityType.ORDER,
+                    entity_id=cast(int, order.id),
+                    user_id=user_id,
+                    status="SUCCESS",
+                    metadata_info={"symbol": symbol, "quantity": quantity, "side": "BUY", "order_type": "MARKET"},
+                    commit=False
+                )
+            
+            AuditService.log(
+                db=db,
+                event_type=event_type,
+                entity_type=AuditEntityType.ORDER,
+                entity_id=cast(int, order.id),
+                user_id=user_id,
+                status="SUCCESS",
+                metadata_info={
+                    "symbol": symbol,
+                    "quantity": quantity,
+                    "price": float(price),
+                    "total_amount": float(total_amount),
+                    "side": "BUY"
+                },
+                commit=False
+            )
             
             # ✅ FIXED: Single atomic commit - all or nothing
             db.commit()
@@ -252,11 +366,34 @@ class OrderService:
                 raise ValueError(f"Insufficient quantity to sell for {symbol}")
             
             # Reduce position
+            prev_state = {"quantity": position.quantity, "average_price": float(cast(Decimal, position.average_price))}
             position.quantity -= quantity
             
             if position.quantity == 0:
                 # Delete position if quantity becomes 0
                 db.delete(position)
+                AuditService.log(
+                    db=db,
+                    event_type=AuditEventType.POSITION_CLOSED,
+                    entity_type=AuditEntityType.POSITION,
+                    entity_id=cast(int, position.id),
+                    user_id=user_id,
+                    status="SUCCESS",
+                    previous_state=prev_state,
+                    commit=False
+                )
+            else:
+                AuditService.log(
+                    db=db,
+                    event_type=AuditEventType.POSITION_UPDATED,
+                    entity_type=AuditEntityType.POSITION,
+                    entity_id=cast(int, position.id),
+                    user_id=user_id,
+                    status="SUCCESS",
+                    previous_state=prev_state,
+                    new_state={"quantity": position.quantity, "average_price": float(cast(Decimal, position.average_price))},
+                    commit=False
+                )
             
             # ✅ FIXED: Lock wallet row
             wallet = db.query(Wallet).filter(
@@ -268,6 +405,17 @@ class OrderService:
             
             # Add to wallet
             wallet.balance += total_amount
+            
+            AuditService.log(
+                db=db,
+                event_type=AuditEventType.WALLET_CREDITED,
+                entity_type=AuditEntityType.WALLET,
+                entity_id=cast(int, wallet.id),
+                user_id=user_id,
+                status="SUCCESS",
+                metadata_info={"amount": float(total_amount), "reason": f"Sell order for {symbol}"},
+                commit=False
+            )
             
             # Update or create order record
             from app.models import OrderType
@@ -290,6 +438,45 @@ class OrderService:
                     executed_at=datetime.utcnow()
                 )
                 db.add(order)
+            
+            db.flush()
+            
+            from app.models import OrderType
+            event_type = AuditEventType.ORDER_EXECUTED
+            if order.order_type == OrderType.LIMIT:
+                event_type = AuditEventType.LIMIT_ORDER_EXECUTED
+            elif order.order_type == OrderType.STOP_LOSS:
+                event_type = AuditEventType.STOP_LOSS_EXECUTED
+            
+            if not existing_order:
+                # Log creation for market orders explicitly in the same transaction
+                AuditService.log(
+                    db=db,
+                    event_type=AuditEventType.ORDER_CREATED,
+                    entity_type=AuditEntityType.ORDER,
+                    entity_id=cast(int, order.id),
+                    user_id=user_id,
+                    status="SUCCESS",
+                    metadata_info={"symbol": symbol, "quantity": quantity, "side": "SELL", "order_type": "MARKET"},
+                    commit=False
+                )
+            
+            AuditService.log(
+                db=db,
+                event_type=event_type,
+                entity_type=AuditEntityType.ORDER,
+                entity_id=cast(int, order.id),
+                user_id=user_id,
+                status="SUCCESS",
+                metadata_info={
+                    "symbol": symbol,
+                    "quantity": quantity,
+                    "price": float(price),
+                    "total_amount": float(total_amount),
+                    "side": "SELL"
+                },
+                commit=False
+            )
             
             # ✅ FIXED: Single atomic commit - all or nothing
             db.commit()
@@ -355,6 +542,24 @@ class OrderService:
             return False
         
         order.status = OrderStatus.CANCELLED
+        
+        from app.models import OrderType
+        event_type = AuditEventType.ORDER_CANCELLED
+        if order.order_type == OrderType.LIMIT:
+            event_type = AuditEventType.LIMIT_ORDER_CANCELLED
+        elif order.order_type == OrderType.STOP_LOSS:
+            event_type = AuditEventType.STOP_LOSS_CANCELLED
+            
+        AuditService.log(
+            db=db,
+            event_type=event_type,
+            entity_type=AuditEntityType.ORDER,
+            entity_id=cast(int, order.id),
+            user_id=cast(int, order.user_id),
+            status="SUCCESS",
+            commit=False
+        )
+        
         db.commit()
         logger.info(f"✓ Order cancelled: {order_id}")
         return True

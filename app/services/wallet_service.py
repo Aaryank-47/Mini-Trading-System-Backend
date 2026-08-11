@@ -2,10 +2,13 @@
 Wallet service for managing wallet operations
 """
 from sqlalchemy.orm import Session
+from typing import cast, Optional
 from app.models import Wallet, User
 from app.schemas import WalletResponse
 from decimal import Decimal, ROUND_HALF_UP
 import logging
+from app.services.audit_service import AuditService
+from app.models.audit import AuditEventType, AuditEntityType
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +17,7 @@ class WalletService:
     """Service for wallet management operations"""
     
     @staticmethod
-    def get_wallet(db: Session, user_id: int) -> Wallet:
+    def get_wallet(db: Session, user_id: int) -> Optional[Wallet]:
         """
         Get wallet for a user
         
@@ -28,7 +31,7 @@ class WalletService:
         return db.query(Wallet).filter(Wallet.user_id == user_id).first()
     
     @staticmethod
-    def get_balance(db: Session, user_id: int) -> Decimal:
+    def get_balance(db: Session, user_id: int) -> Optional[Decimal]:
         """
         Get current wallet balance
         
@@ -40,7 +43,7 @@ class WalletService:
             Balance amount as Decimal or None
         """
         wallet = WalletService.get_wallet(db, user_id)
-        return wallet.balance if wallet else None
+        return cast(Decimal, wallet.balance) if wallet else None
     
     @staticmethod
     def deduct_balance(db: Session, user_id: int, amount: float) -> bool:
@@ -55,10 +58,10 @@ class WalletService:
         Returns:
             True if successful, False if insufficient balance
         """
-        # ✅ FIXED: Convert to Decimal with proper rounding
-        amount = Decimal(str(amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        # FIXED: Convert to Decimal with proper rounding
+        dec_amount = Decimal(str(amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         
-        # ✅ FIXED: Use with_for_update() for row-level locking (atomic)
+        # FIXED: Use with_for_update() for row-level locking (atomic)
         wallet = db.query(Wallet).filter(
             Wallet.user_id == user_id
         ).with_for_update().first()
@@ -66,11 +69,23 @@ class WalletService:
         if not wallet:
             raise ValueError(f"Wallet not found for user {user_id}")
         
-        if wallet.balance < amount:
-            logger.warning(f"Insufficient balance for user {user_id}: {wallet.balance} < {amount}")
+        if wallet.balance < dec_amount:
+            logger.warning(f"Insufficient balance for user {user_id}: {wallet.balance} < {dec_amount}")
             return False
         
-        wallet.balance -= amount
+        wallet.balance -= dec_amount
+        
+        AuditService.log(
+            db=db,
+            event_type=AuditEventType.WALLET_DEBITED,
+            entity_type=AuditEntityType.WALLET,
+            entity_id=cast(int, wallet.id),
+            user_id=user_id,
+            status="SUCCESS",
+            metadata_info={"amount": float(amount), "reason": "Manual deduction"},
+            commit=False
+        )
+        
         db.commit()
         logger.info(f"✓ Balance deducted: {user_id}, Amount: {amount}")
         return True
@@ -88,8 +103,8 @@ class WalletService:
         Returns:
             True if successful
         """
-        # ✅ FIXED: Convert to Decimal with proper rounding
-        amount = Decimal(str(amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        # FIXED: Convert to Decimal with proper rounding
+        dec_amount = Decimal(str(amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         
         # ✅ FIXED: Use with_for_update() for row-level locking
         wallet = db.query(Wallet).filter(
@@ -99,7 +114,19 @@ class WalletService:
         if not wallet:
             raise ValueError(f"Wallet not found for user {user_id}")
         
-        wallet.balance += amount
+        wallet.balance += dec_amount
+        
+        AuditService.log(
+            db=db,
+            event_type=AuditEventType.WALLET_CREDITED,
+            entity_type=AuditEntityType.WALLET,
+            entity_id=cast(int, wallet.id),
+            user_id=user_id,
+            status="SUCCESS",
+            metadata_info={"amount": float(amount), "reason": "Manual addition"},
+            commit=False
+        )
+        
         db.commit()
         logger.info(f"✓ Balance added: {user_id}, Amount: {amount}")
         return True

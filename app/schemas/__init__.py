@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr, Field, validator, root_validator
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
+from .audit import AuditLogResponse, PaginatedAuditLogs
 class ORMBase(BaseModel):
     """Base model for ORM schema conversions"""
     class Config: # type: ignore

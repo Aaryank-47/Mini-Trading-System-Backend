@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas import UserCreate, UserResponse, TokenResponse, LoginRequest, LoginResponse, AccessTokenResponse
 from app.services.user_service import UserService
+from app.services.audit_service import AuditService
+from app.models.audit import AuditEventType, AuditEntityType
 from app.security import create_access_token, create_token_pair, verify_token, get_current_user, verify_user_ownership, TOKEN_TYPE_REFRESH
-from typing import List
+from typing import List, cast
 from datetime import timedelta
 import logging
 
@@ -36,7 +38,7 @@ def register(
     """
     try:
         user = UserService.create_user(db, user_data)
-        access_token, refresh_token = create_token_pair(user.id)
+        access_token, refresh_token = create_token_pair(cast(int, user.id))
         
         logger.info(f"✓ User registered: {user.id} ({user_data.email})")
         
@@ -89,7 +91,7 @@ def login(
     """
     try:
         user = UserService.authenticate_user(db, login_data.email, login_data.password)
-        access_token, refresh_token = create_token_pair(user.id)
+        access_token, refresh_token = create_token_pair(cast(int, user.id))
         
         logger.info(f"✓ User logged in: {user.id} ({login_data.email})")
         print("user id for login : ", user.id)
@@ -118,9 +120,38 @@ def login(
             max_age=7 * 24 * 60 * 60  # 7 days
         )
         
+        # Audit Log
+        AuditService.log(
+            db=db,
+            event_type=AuditEventType.LOGIN_SUCCESS,
+            entity_type=AuditEntityType.USER,
+            entity_id=cast(int, user.id),
+            user_id=cast(int, user.id),
+            status="SUCCESS",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            commit=True
+        )
+        
         return response
     except ValueError as e:
         logger.warning(f"Login failed: {e}")
+        
+        # Attempt to find user by email for audit log
+        failed_user = UserService.get_user_by_email(db, login_data.email)
+        AuditService.log(
+            db=db,
+            event_type=AuditEventType.LOGIN_FAILED,
+            entity_type=AuditEntityType.USER,
+            entity_id=cast(int, failed_user.id) if failed_user else None,
+            user_id=cast(int, failed_user.id) if failed_user else None,
+            status="FAILED",
+            metadata_info={"reason": str(e), "email": login_data.email},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            commit=True
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e)
@@ -137,7 +168,7 @@ def login(
 @limiter.limit("30/minute")
 def refresh_token(
     request: Request,
-    refresh_request: dict = None,
+    refresh_request: dict = cast(dict, None),
     db: Session = Depends(get_db)
 ):
     """
@@ -159,7 +190,7 @@ def refresh_token(
             )
             
         payload = verify_token(refresh_token_str, token_type=TOKEN_TYPE_REFRESH)
-        user_id = int(payload.get("sub"))
+        user_id = cast(int, payload.get("sub")) 
         user = UserService.get_user(db, user_id)
         
         if not user:
