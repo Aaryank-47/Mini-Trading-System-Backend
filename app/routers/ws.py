@@ -4,11 +4,13 @@ import logging
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, status
 from jose import JWTError, jwt
+from pydantic import ValidationError
 
 from app.config import get_settings
 from app.database import get_db
 from app.services.user_service import UserService
 from app.websocket import connection_manager
+from app.websocket.events import IncomingWSMessage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -69,15 +71,28 @@ async def websocket_endpoint(
 
             try:
                 payload = json.loads(data)
-            except Exception:
-                payload = {"event": data} if data else {}
-
-            if payload.get("event") == "pong":
-                await connection_manager.mark_activity(websocket)
+                msg = IncomingWSMessage(**payload)
+            except json.JSONDecodeError:
+                await websocket.send_json({"event": "error", "data": {"code": "INVALID_MESSAGE", "message": "Invalid JSON"}})
+                continue
+            except ValidationError as exc:
+                await websocket.send_json({"event": "error", "data": {"code": "INVALID_MESSAGE", "message": "Invalid message structure", "details": exc.errors()}})
                 continue
 
-            if data:
-                logger.debug("Message from user %s: %s", user_id, data)
+            if msg.event == "pong":
+                await connection_manager.mark_activity(websocket)
+                continue
+                
+            if msg.action == "subscribe" and msg.channel:
+                await connection_manager.subscribe(websocket, msg.channel)
+                logger.debug("User %s subscribed to %s", user_id, msg.channel)
+                continue
+            elif msg.action == "unsubscribe" and msg.channel:
+                await connection_manager.unsubscribe(websocket, msg.channel)
+                logger.debug("User %s unsubscribed from %s", user_id, msg.channel)
+                continue
+
+            logger.debug("Valid message from user %s: %s", user_id, msg.dict())
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnect received for user {user_id}")
     except Exception as exc:

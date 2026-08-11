@@ -48,47 +48,61 @@ async def _forward_payload(channel: str, payload: Dict[str, Any]) -> None:
 
 
 async def _bridge_loop() -> None:
-    client = get_redis_client()
-    if not client:
-        logger.info("Realtime bridge not started because Redis is unavailable")
-        return
+    base_delay = 1.0
+    max_delay = 30.0
+    attempt = 0
 
-    pubsub = client.pubsub(ignore_subscribe_messages=True)
-    pubsub.subscribe(PRICE_UPDATES_CHANNEL, ORDER_EVENTS_CHANNEL)
-    logger.info(
-        "Realtime bridge subscribed to Redis channels: %s, %s",
-        PRICE_UPDATES_CHANNEL,
-        ORDER_EVENTS_CHANNEL,
-    )
+    while _stop_event and not _stop_event.is_set():
+        client = get_redis_client()
+        if not client:
+            logger.info("Realtime bridge waiting for Redis...")
+            await asyncio.sleep(min(base_delay * (2 ** attempt), max_delay))
+            attempt += 1
+            continue
 
-    try:
-        while _stop_event and not _stop_event.is_set():
-            message = await asyncio.to_thread(pubsub.get_message, timeout=1.0)
-            if not message or message.get("type") != "message":
-                await asyncio.sleep(0.1)
-                continue
-
-            channel = message.get("channel")
-            raw_payload = message.get("data")
-
-            try:
-                payload = json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload
-            except Exception as exc:
-                logger.error(f"Invalid realtime payload on {channel}: {exc}")
-                continue
-
-            if isinstance(payload, dict):
-                await _forward_payload(str(channel), payload)
-    except asyncio.CancelledError:
-        logger.info("Realtime bridge task cancelled")
-        raise
-    except Exception as exc:
-        logger.error(f"Realtime bridge stopped unexpectedly: {exc}")
-    finally:
+        pubsub = None
         try:
-            pubsub.close()
-        except Exception:
-            pass
+            pubsub = client.pubsub(ignore_subscribe_messages=True)
+            pubsub.subscribe(PRICE_UPDATES_CHANNEL, ORDER_EVENTS_CHANNEL)
+            logger.info(
+                "Realtime bridge subscribed to Redis channels: %s, %s",
+                PRICE_UPDATES_CHANNEL,
+                ORDER_EVENTS_CHANNEL,
+            )
+            attempt = 0  # reset on successful connection
+
+            while _stop_event and not _stop_event.is_set():
+                message = await asyncio.to_thread(pubsub.get_message, timeout=1.0)
+                if not message or message.get("type") != "message":
+                    await asyncio.sleep(0.1)
+                    continue
+
+                channel = message.get("channel")
+                raw_payload = message.get("data")
+
+                try:
+                    payload = json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload
+                except Exception as exc:
+                    logger.error(f"Invalid realtime payload on {channel}: {exc}")
+                    continue
+
+                if isinstance(payload, dict):
+                    channel_str = channel.decode('utf-8') if isinstance(channel, bytes) else str(channel)
+                    await _forward_payload(channel_str, payload)
+
+        except asyncio.CancelledError:
+            logger.info("Realtime bridge task cancelled")
+            raise
+        except Exception as exc:
+            logger.error(f"Realtime bridge stopped unexpectedly: {exc}")
+            await asyncio.sleep(min(base_delay * (2 ** attempt), max_delay))
+            attempt += 1
+        finally:
+            if pubsub:
+                try:
+                    pubsub.close()
+                except Exception:
+                    pass
 
 
 def start_realtime_bridge(manager) -> None:

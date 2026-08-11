@@ -14,12 +14,15 @@ from app.websocket.events import build_ws_message, normalize_ws_message
 logger = logging.getLogger(__name__)
 
 
+from dataclasses import dataclass, field
+
 @dataclass
 class ConnectionState:
     websocket: WebSocket
     connected_at: float
     last_seen: float
     message_count: int = 0
+    subscriptions: Set[str] = field(default_factory=set)
 
 
 class ConnectionManager:
@@ -77,9 +80,23 @@ class ConnectionManager:
         """Send a structured message to one user's active connections."""
         return await self.broadcast_to_user(user_id, message)
 
-    async def broadcast(self, message: Any) -> int:
-        """Broadcast a structured message to all connected users."""
-        return await self.broadcast_to_all(message)
+    async def broadcast(self, message: Any, channel: Optional[str] = None) -> int:
+        """Broadcast a structured message to all connected users, optionally filtering by channel."""
+        return await self.broadcast_to_all(message, channel=channel)
+
+    async def subscribe(self, websocket: WebSocket, channel: str) -> None:
+        """Subscribe a connection to a specific channel."""
+        async with self._lock:
+            state = self._states.get(websocket)
+            if state:
+                state.subscriptions.add(channel)
+
+    async def unsubscribe(self, websocket: WebSocket, channel: str) -> None:
+        """Unsubscribe a connection from a specific channel."""
+        async with self._lock:
+            state = self._states.get(websocket)
+            if state:
+                state.subscriptions.discard(channel)
 
     async def mark_activity(self, websocket: WebSocket) -> None:
         """Update the last-seen timestamp for an active connection."""
@@ -127,20 +144,32 @@ class ConnectionManager:
 
         return delivered
 
-    async def broadcast_to_all(self, message: Any) -> int:
-        """Broadcast a message to all connected users."""
+    async def broadcast_to_all(self, message: Any, channel: Optional[str] = None) -> int:
+        """Broadcast a message to all connected users, optionally filtering by subscription channel."""
         payload = normalize_ws_message(message)
 
         async with self._lock:
-            targets = [(user_id, list(sockets)) for user_id, sockets in self._connections.items()]
+            # Check subscriptions inside the lock to get a stable snapshot
+            targets: List[tuple[int, WebSocket]] = []
+            for user_id, sockets in self._connections.items():
+                for websocket in sockets:
+                    if channel:
+                        state = self._states.get(websocket)
+                        if not state or channel not in state.subscriptions:
+                            continue
+                    targets.append((user_id, websocket))
 
         delivered = 0
-        for user_id, sockets in targets:
-            for websocket in sockets:
-                if await self._send_json(websocket, user_id, payload):
-                    delivered += 1
-                else:
-                    await self.disconnect(user_id, websocket)
+        stale_sockets: List[tuple[int, WebSocket]] = []
+
+        for user_id, websocket in targets:
+            if await self._send_json(websocket, user_id, payload):
+                delivered += 1
+            else:
+                stale_sockets.append((user_id, websocket))
+                
+        for user_id, websocket in stale_sockets:
+            await self.disconnect(user_id, websocket)
 
         return delivered
 

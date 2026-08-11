@@ -1,6 +1,16 @@
 """Helpers for structured WebSocket event payloads."""
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
+from pydantic import BaseModel, Field
+
+class IncomingWSMessage(BaseModel):
+    """Schema for validating incoming WebSocket messages."""
+    event: Optional[str] = None
+    action: Optional[str] = None
+    channel: Optional[str] = None
+    symbols: Optional[List[str]] = None
+    data: Optional[Dict[str, Any]] = None
+    request_id: Optional[str] = None
 
 
 def build_ws_message(event: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
